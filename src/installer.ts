@@ -22,12 +22,31 @@ export class DotnetVersionResolver {
   private inputVersion: string;
   private resolvedArgument: DotnetVersion;
 
-  constructor(version: string) {
+  constructor(
+    version: string,
+    private quality: QualityOptions = '' as QualityOptions,
+    private dotnetChannel?: string
+  ) {
     this.inputVersion = version.trim();
     this.resolvedArgument = {type: '', value: '', qualityFlag: false};
   }
 
   private async resolveVersionInput(): Promise<void> {
+    if (this.inputVersion.toLowerCase() === 'latest') {
+      this.resolvedArgument.value = await this.getLatestVersion(
+        this.dotnetChannel || ''
+      );
+      this.resolvedArgument.type = 'channel';
+      this.resolvedArgument.qualityFlag = true;
+      return;
+    }
+
+    if (this.dotnetChannel) {
+      core.warning(
+        `The 'dotnet-channel' input is only supported when 'dotnet-version' is set to 'latest'. The value '${this.dotnetChannel}' will be ignored.`
+      );
+    }
+
     if (!semver.validRange(this.inputVersion) && !this.isLatestPatchSyntax()) {
       throw new Error(
         `The 'dotnet-version' was supplied in invalid format: ${this.inputVersion}! Supported syntax: A.B.C, A.B, A.B.x, A, A.x, A.B.Cxx`
@@ -94,6 +113,54 @@ export class DotnetVersionResolver {
         this.resolvedArgument.type === 'channel' ? '--channel' : '--version';
     }
     return this.resolvedArgument;
+  }
+
+  private async getLatestVersion(channelFilter: string): Promise<string> {
+    const httpClient = new hc.HttpClient('actions/setup-dotnet', [], {
+      allowRetries: true,
+      maxRetries: 3
+    });
+
+    const response = await httpClient.getJson<any>(
+      DotnetVersionResolver.DotnetCoreIndexUrl
+    );
+
+    const result = response.result || {};
+    let releasesInfo: any[] = result['releases-index'];
+
+    // Filter out EOL versions
+    releasesInfo = releasesInfo.filter(info => info['support-phase'] !== 'eol');
+
+    // Filter out preview versions if quality is not 'preview' or 'daily'
+    // If quality is not specified, we assume strict stability (GA only)
+    if (!['preview', 'daily'].includes(this.quality)) {
+      releasesInfo = releasesInfo.filter(
+        info => info['support-phase'] !== 'preview'
+      );
+    }
+
+    // Apply channel filter (LTS/STS)
+    if (channelFilter) {
+      const type = channelFilter.toLowerCase();
+      releasesInfo = releasesInfo.filter(info => info['release-type'] === type);
+    }
+
+    releasesInfo.sort((a, b) => {
+      // channel-version is like "8.0", "10.0".
+      const vA = parseFloat(a['channel-version']);
+      const vB = parseFloat(b['channel-version']);
+      return vB - vA;
+    });
+
+    if (releasesInfo.length === 0) {
+      throw new Error(
+        `Could not find any active releases matching channel '${
+          channelFilter || 'any'
+        }'`
+      );
+    }
+
+    return releasesInfo[0]['channel-version'];
   }
 
   private async getLatestByMajorTag(majorTag: string): Promise<string> {
@@ -279,11 +346,16 @@ export class DotnetCoreInstaller {
   constructor(
     private version: string,
     private quality: QualityOptions,
-    private architecture?: string
+    private architecture?: string,
+    private dotnetChannel?: string
   ) {}
 
   public async installDotnet(): Promise<string | null> {
-    const versionResolver = new DotnetVersionResolver(this.version);
+    const versionResolver = new DotnetVersionResolver(
+      this.version,
+      this.quality,
+      this.dotnetChannel
+    );
     const dotnetVersion = await versionResolver.createDotnetVersion();
 
     const architectureArguments =

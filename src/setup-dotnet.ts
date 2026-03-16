@@ -50,6 +50,16 @@ export async function run() {
     const versions = core.getMultilineInput('dotnet-version');
     const installedDotnetVersions: (string | null)[] = [];
     const architecture = getArchitectureInput();
+    const dotnetChannel = core.getInput('dotnet-channel');
+
+    if (
+      dotnetChannel &&
+      !['LTS', 'STS'].includes(dotnetChannel.toUpperCase())
+    ) {
+      throw new Error(
+        `Value '${dotnetChannel}' is not supported for the 'dotnet-channel' option. Supported values are: LTS, STS.`
+      );
+    }
 
     const globalJsonFileInput = core.getInput('global-json-file');
     if (globalJsonFileInput) {
@@ -90,7 +100,8 @@ export async function run() {
         dotnetInstaller = new DotnetCoreInstaller(
           version,
           quality,
-          architecture
+          architecture,
+          dotnetChannel
         );
         const installedVersion = await dotnetInstaller.installDotnet();
         installedDotnetVersions.push(installedVersion);
