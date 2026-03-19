@@ -69,7 +69,7 @@ export class DotnetVersionResolver {
     }
   }
 
-  private isNumericTag(versionTag): boolean {
+  private isNumericTag(versionTag: string): boolean {
     return /^\d+$/.test(versionTag);
   }
 
@@ -189,12 +189,16 @@ export class DotnetVersionResolver {
       maxRetries: 3
     });
 
-    const response = await httpClient.getJson<any>(
+    const response = await httpClient.getJson<ReleaseIndexResponse>(
       DotnetVersionResolver.DotnetCoreIndexUrl
     );
 
-    const result = response.result || {};
-    const releasesInfo: any[] = result['releases-index'];
+    const result = response.result;
+    const releasesInfo = result?.['releases-index'];
+
+    if (!Array.isArray(releasesInfo)) {
+      throw new Error('Unexpected response format from .NET releases index.');
+    }
 
     const releaseInfo = releasesInfo.find(info => {
       const sdkParts: string[] = info['channel-version'].split('.');

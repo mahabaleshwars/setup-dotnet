@@ -174,4 +174,32 @@ describe('DotnetVersionResolver with latest', () => {
       /Unexpected response format/
     );
   });
+
+  it('should resolve "latest" with ga quality same as default (no previews)', async () => {
+    getJsonMock.mockResolvedValue({result: mockReleases});
+
+    const resolver = new DotnetVersionResolver(
+      'latest',
+      'ga' as QualityOptions
+    );
+    const version = await resolver.createDotnetVersion();
+
+    // ga should behave like no quality — skip preview (10.0), pick 9.0
+    expect(version.value).toBe('9.0');
+  });
+
+  it('should resolve "latest" with LTS channel and daily quality', async () => {
+    getJsonMock.mockResolvedValue({result: mockReleases});
+
+    const resolver = new DotnetVersionResolver(
+      'latest',
+      'daily' as QualityOptions,
+      'LTS'
+    );
+    const version = await resolver.createDotnetVersion();
+
+    // daily allows previews, but LTS filter applies — 9.0 is the only LTS
+    expect(version.value).toBe('9.0');
+    expect(version.qualityFlag).toBe(true);
+  });
 });
