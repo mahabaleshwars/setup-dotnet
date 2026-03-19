@@ -57,6 +57,71 @@ The `dotnet-version` input supports following syntax:
 - **A.B** or **A.B.x** (e.g. 8.0, 8.0.x) - installs the latest patch version of .NET SDK on the channel `8.0`, including prerelease versions (preview, rc)
 - **A** or **A.x** (e.g. 8, 8.x) - installs the latest minor version of the specified major tag, including prerelease versions (preview, rc)
 - **A.B.Cxx** (e.g. 8.0.4xx) - available since `.NET 5.0` release. Installs the latest version of the specific SDK release, including prerelease versions (preview, rc). 
+- **latest** - installs the latest available stable .NET SDK version. Can be combined with `dotnet-channel` and `dotnet-quality` inputs.
+
+## Using the `dotnet-version: latest` keyword
+
+The `latest` keyword dynamically resolves to the highest available .NET SDK version from the official releases index. By default, it installs the latest **stable (GA)** version, excluding previews and end-of-life releases.
+
+```yaml
+steps:
+- uses: actions/checkout@v6
+- uses: actions/setup-dotnet@v5
+  with:
+    dotnet-version: latest
+- run: dotnet build <my project>
+```
+
+### Using with `dotnet-channel`
+
+The optional `dotnet-channel` input filters the `latest` version by release type. Supported values: `LTS` (Long Term Support) and `STS` (Standard Term Support).
+
+> **Note**: The `dotnet-channel` input is only used when `dotnet-version` is set to `latest`. If used with a specific version, a warning will be logged and the channel input will be ignored.
+
+**Install latest LTS version:**
+```yaml
+steps:
+- uses: actions/checkout@v6
+- uses: actions/setup-dotnet@v5
+  with:
+    dotnet-version: latest
+    dotnet-channel: LTS
+```
+
+**Install latest STS version:**
+```yaml
+steps:
+- uses: actions/checkout@v6
+- uses: actions/setup-dotnet@v5
+  with:
+    dotnet-version: latest
+    dotnet-channel: STS
+```
+
+### Combining `latest` with `dotnet-quality`
+
+The `dotnet-quality` input works seamlessly with `latest`. Without it, `latest` defaults to stable (GA) versions only.
+
+**Install the latest preview version:**
+```yaml
+steps:
+- uses: actions/checkout@v6
+- uses: actions/setup-dotnet@v5
+  with:
+    dotnet-version: latest
+    dotnet-quality: preview
+```
+
+**Install the latest LTS daily build:**
+```yaml
+steps:
+- uses: actions/checkout@v6
+- uses: actions/setup-dotnet@v5
+  with:
+    dotnet-version: latest
+    dotnet-channel: LTS
+    dotnet-quality: daily
+```
 
 
 ## Using the `architecture` input

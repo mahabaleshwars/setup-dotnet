@@ -54872,12 +54872,17 @@ class DotnetVersionResolver {
         });
         const response = await httpClient.getJson(DotnetVersionResolver.DotnetCoreIndexUrl);
         const result = response.result || {};
-        let releasesInfo = result['releases-index'];
+        const rawReleasesInfo = result['releases-index'];
+        if (!Array.isArray(rawReleasesInfo)) {
+            throw new Error('Unexpected response format from .NET releases index.');
+        }
+        let releasesInfo = rawReleasesInfo;
         // Filter out EOL versions
         releasesInfo = releasesInfo.filter(info => info['support-phase'] !== 'eol');
         // Filter out preview versions if quality is not 'preview' or 'daily'
         // If quality is not specified, we assume strict stability (GA only)
-        if (!['preview', 'daily'].includes(this.quality)) {
+        const normalizedQuality = (this.quality || '').toLowerCase();
+        if (!['preview', 'daily'].includes(normalizedQuality)) {
             releasesInfo = releasesInfo.filter(info => info['support-phase'] !== 'preview');
         }
         // Apply channel filter (LTS/STS)
@@ -54886,10 +54891,14 @@ class DotnetVersionResolver {
             releasesInfo = releasesInfo.filter(info => info['release-type'] === type);
         }
         releasesInfo.sort((a, b) => {
-            // channel-version is like "8.0", "10.0".
-            const vA = parseFloat(a['channel-version']);
-            const vB = parseFloat(b['channel-version']);
-            return vB - vA;
+            const partsA = a['channel-version'].split('.').map(Number);
+            const partsB = b['channel-version'].split('.').map(Number);
+            for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
+                const diff = (partsB[i] || 0) - (partsA[i] || 0);
+                if (diff !== 0)
+                    return diff;
+            }
+            return 0;
         });
         if (releasesInfo.length === 0) {
             throw new Error(`Could not find any active releases matching channel '${channelFilter || 'any'}'`);

@@ -6,11 +6,9 @@ import * as core from '@actions/core';
 // Mock http-client
 jest.mock('@actions/http-client');
 
-// Mock warning
-const warningSpy = jest.spyOn(core, 'warning').mockImplementation(() => {});
-
 describe('DotnetVersionResolver with latest', () => {
   let getJsonMock: jest.Mock;
+  let warningSpy: jest.SpyInstance;
 
   beforeEach(() => {
     getJsonMock = jest.fn();
@@ -19,10 +17,12 @@ describe('DotnetVersionResolver with latest', () => {
         getJson: getJsonMock
       };
     });
+    warningSpy = jest.spyOn(core, 'warning').mockImplementation(() => {});
   });
 
   afterEach(() => {
     jest.clearAllMocks();
+    jest.restoreAllMocks();
   });
 
   const mockReleases = {
@@ -53,11 +53,18 @@ describe('DotnetVersionResolver with latest', () => {
   it('should resolve "latest" to highest stable version by default', async () => {
     getJsonMock.mockResolvedValue({result: mockReleases});
 
-    // 10.0 is preview, so it should be skipped.
-    // 9.0 is active.
-    // Expect 9.0.
-
     const resolver = new DotnetVersionResolver('latest');
+    const version = await resolver.createDotnetVersion();
+
+    expect(version.value).toBe('9.0');
+    expect(version.type.toLowerCase()).toContain('channel');
+    expect(version.qualityFlag).toBe(true);
+  });
+
+  it('should resolve "LATEST" (uppercase) to highest stable version', async () => {
+    getJsonMock.mockResolvedValue({result: mockReleases});
+
+    const resolver = new DotnetVersionResolver('LATEST');
     const version = await resolver.createDotnetVersion();
 
     expect(version.value).toBe('9.0');
@@ -67,8 +74,6 @@ describe('DotnetVersionResolver with latest', () => {
 
   it('should resolve "latest" to highest preview version if quality is preview', async () => {
     getJsonMock.mockResolvedValue({result: mockReleases});
-
-    // Expect 10.0
 
     const resolver = new DotnetVersionResolver(
       'latest',
@@ -81,10 +86,6 @@ describe('DotnetVersionResolver with latest', () => {
 
   it('should resolve "latest" with channel filter LTS', async () => {
     getJsonMock.mockResolvedValue({result: mockReleases});
-
-    // 10.0 (preview, sts) -> skipped? Wait 10.0 is sts.
-    // 9.0 (lts).
-    // Expect 9.0.
 
     const resolver = new DotnetVersionResolver(
       'latest',
@@ -99,10 +100,6 @@ describe('DotnetVersionResolver with latest', () => {
   it('should resolve "latest" with channel filter STS', async () => {
     getJsonMock.mockResolvedValue({result: mockReleases});
 
-    // 10.0 (preview, sts) -> skipped (default quality).
-    // 8.0 (maintenance, sts).
-    // Expect 8.0.
-
     const resolver = new DotnetVersionResolver(
       'latest',
       '' as QualityOptions,
@@ -115,9 +112,6 @@ describe('DotnetVersionResolver with latest', () => {
 
   it('should resolve "latest" with channel filter STS and preview quality', async () => {
     getJsonMock.mockResolvedValue({result: mockReleases});
-
-    // 10.0 (preview, sts) -> included.
-    // Expect 10.0.
 
     const resolver = new DotnetVersionResolver(
       'latest',
@@ -140,5 +134,44 @@ describe('DotnetVersionResolver with latest', () => {
     await resolver.createDotnetVersion();
 
     expect(warningSpy).toHaveBeenCalledWith(expect.stringContaining('ignored'));
+  });
+
+  it('should throw when releases-index API returns empty active releases', async () => {
+    const emptyReleases = {
+      'releases-index': [
+        {
+          'channel-version': '7.0',
+          'support-phase': 'eol',
+          'release-type': 'lts'
+        }
+      ]
+    };
+    getJsonMock.mockResolvedValue({result: emptyReleases});
+
+    const resolver = new DotnetVersionResolver('latest');
+
+    await expect(resolver.createDotnetVersion()).rejects.toThrow(
+      /Could not find any active releases/
+    );
+  });
+
+  it('should throw when releases-index response has unexpected format', async () => {
+    getJsonMock.mockResolvedValue({result: {}});
+
+    const resolver = new DotnetVersionResolver('latest');
+
+    await expect(resolver.createDotnetVersion()).rejects.toThrow(
+      /Unexpected response format/
+    );
+  });
+
+  it('should throw when releases-index response is null', async () => {
+    getJsonMock.mockResolvedValue({result: null});
+
+    const resolver = new DotnetVersionResolver('latest');
+
+    await expect(resolver.createDotnetVersion()).rejects.toThrow(
+      /Unexpected response format/
+    );
   });
 });

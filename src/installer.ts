@@ -16,6 +16,12 @@ export interface DotnetVersion {
   qualityFlag: boolean;
 }
 
+interface ReleaseIndexEntry {
+  'channel-version': string;
+  'support-phase': string;
+  'release-type': string;
+}
+
 const QUALITY_INPUT_MINIMAL_MAJOR_TAG = 6;
 const LATEST_PATCH_SYNTAX_MINIMAL_MAJOR_TAG = 5;
 export class DotnetVersionResolver {
@@ -126,14 +132,21 @@ export class DotnetVersionResolver {
     );
 
     const result = response.result || {};
-    let releasesInfo: any[] = result['releases-index'];
+    const rawReleasesInfo: ReleaseIndexEntry[] = result['releases-index'];
+
+    if (!Array.isArray(rawReleasesInfo)) {
+      throw new Error('Unexpected response format from .NET releases index.');
+    }
+
+    let releasesInfo = rawReleasesInfo;
 
     // Filter out EOL versions
     releasesInfo = releasesInfo.filter(info => info['support-phase'] !== 'eol');
 
     // Filter out preview versions if quality is not 'preview' or 'daily'
     // If quality is not specified, we assume strict stability (GA only)
-    if (!['preview', 'daily'].includes(this.quality)) {
+    const normalizedQuality = (this.quality || '').toLowerCase();
+    if (!['preview', 'daily'].includes(normalizedQuality)) {
       releasesInfo = releasesInfo.filter(
         info => info['support-phase'] !== 'preview'
       );
@@ -146,10 +159,13 @@ export class DotnetVersionResolver {
     }
 
     releasesInfo.sort((a, b) => {
-      // channel-version is like "8.0", "10.0".
-      const vA = parseFloat(a['channel-version']);
-      const vB = parseFloat(b['channel-version']);
-      return vB - vA;
+      const partsA = a['channel-version'].split('.').map(Number);
+      const partsB = b['channel-version'].split('.').map(Number);
+      for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
+        const diff = (partsB[i] || 0) - (partsA[i] || 0);
+        if (diff !== 0) return diff;
+      }
+      return 0;
     });
 
     if (releasesInfo.length === 0) {
