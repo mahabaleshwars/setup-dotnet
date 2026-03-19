@@ -22,6 +22,10 @@ interface ReleaseIndexEntry {
   'release-type': string;
 }
 
+interface ReleaseIndexResponse {
+  'releases-index': ReleaseIndexEntry[];
+}
+
 const QUALITY_INPUT_MINIMAL_MAJOR_TAG = 6;
 const LATEST_PATCH_SYNTAX_MINIMAL_MAJOR_TAG = 5;
 export class DotnetVersionResolver {
@@ -127,12 +131,12 @@ export class DotnetVersionResolver {
       maxRetries: 3
     });
 
-    const response = await httpClient.getJson<any>(
+    const response = await httpClient.getJson<ReleaseIndexResponse>(
       DotnetVersionResolver.DotnetCoreIndexUrl
     );
 
-    const result = response.result || {};
-    const rawReleasesInfo: ReleaseIndexEntry[] = result['releases-index'];
+    const result = response.result;
+    const rawReleasesInfo = result?.['releases-index'];
 
     if (!Array.isArray(rawReleasesInfo)) {
       throw new Error('Unexpected response format from .NET releases index.');

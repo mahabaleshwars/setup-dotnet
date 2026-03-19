@@ -54871,8 +54871,8 @@ class DotnetVersionResolver {
             maxRetries: 3
         });
         const response = await httpClient.getJson(DotnetVersionResolver.DotnetCoreIndexUrl);
-        const result = response.result || {};
-        const rawReleasesInfo = result['releases-index'];
+        const result = response.result;
+        const rawReleasesInfo = result?.['releases-index'];
         if (!Array.isArray(rawReleasesInfo)) {
             throw new Error('Unexpected response format from .NET releases index.');
         }
