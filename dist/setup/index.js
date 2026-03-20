@@ -54800,7 +54800,10 @@ class DotnetVersionResolver {
         if (this.inputVersion.toLowerCase() === 'latest') {
             this.resolvedArgument.value = await this.getLatestVersion(this.dotnetChannel || '');
             this.resolvedArgument.type = 'channel';
-            this.resolvedArgument.qualityFlag = true;
+            const latestChannelMajorTag = Number(this.resolvedArgument.value.split('.')[0]);
+            this.resolvedArgument.qualityFlag =
+                !Number.isNaN(latestChannelMajorTag) &&
+                    latestChannelMajorTag >= QUALITY_INPUT_MINIMAL_MAJOR_TAG;
             return;
         }
         if (this.dotnetChannel) {

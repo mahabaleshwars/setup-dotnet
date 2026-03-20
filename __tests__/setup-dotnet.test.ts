@@ -256,5 +256,29 @@ describe('setup-dotnet tests', () => {
       await setup.run();
       expect(setFailedSpy).toHaveBeenCalledWith(expectedErrorMessage);
     });
+
+    it('should fail the action if unsupported dotnet-channel value is provided', async () => {
+      inputs['dotnet-version'] = ['latest'];
+      inputs['dotnet-quality'] = '';
+      inputs['dotnet-channel'] = 'invalid';
+      inputs['architecture'] = '';
+
+      const expectedErrorMessage = `Value 'invalid' is not supported for the 'dotnet-channel' option. Supported values are: LTS, STS.`;
+
+      await setup.run();
+      expect(setFailedSpy).toHaveBeenCalledWith(expectedErrorMessage);
+    });
+
+    it('should pass valid dotnet-channel value through without error', async () => {
+      inputs['dotnet-version'] = ['latest'];
+      inputs['dotnet-quality'] = '';
+      inputs['dotnet-channel'] = 'LTS';
+      inputs['architecture'] = '';
+
+      installDotnetSpy.mockImplementation(() => Promise.resolve(''));
+
+      await setup.run();
+      expect(setFailedSpy).not.toHaveBeenCalled();
+    });
   });
 });
