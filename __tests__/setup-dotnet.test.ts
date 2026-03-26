@@ -84,7 +84,7 @@ describe('setup-dotnet tests', () => {
       inputs['dotnet-version'] = ['10.0'];
       inputs['dotnet-quality'] = 'fictitiousQuality';
 
-      const expectedErrorMessage = `Value '${inputs['dotnet-quality']}' is not supported for the 'dotnet-quality' option. Supported values are: daily, signed, validated, preview, ga.`;
+      const expectedErrorMessage = `Value '${inputs['dotnet-quality']}' is not supported for the 'dotnet-quality' option. Supported values are: daily, preview, ga.`;
 
       await setup.run();
       expect(setFailedSpy).toHaveBeenCalledWith(expectedErrorMessage);

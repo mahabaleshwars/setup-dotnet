@@ -55176,13 +55176,7 @@ const cache_utils_1 = __nccwpck_require__(41678);
 const cache_restore_1 = __nccwpck_require__(19517);
 const constants_1 = __nccwpck_require__(69042);
 const json5_1 = __importDefault(__nccwpck_require__(86904));
-const qualityOptions = [
-    'daily',
-    'signed',
-    'validated',
-    'preview',
-    'ga'
-];
+const qualityOptions = ['daily', 'preview', 'ga'];
 const supportedArchitectures = [
     'x64',
     'x86',
@@ -55234,7 +55228,7 @@ async function run() {
         if (versions.length) {
             const quality = core.getInput('dotnet-quality');
             if (quality && !qualityOptions.includes(quality)) {
-                throw new Error(`Value '${quality}' is not supported for the 'dotnet-quality' option. Supported values are: daily, signed, validated, preview, ga.`);
+                throw new Error(`Value '${quality}' is not supported for the 'dotnet-quality' option. Supported values are: daily, preview, ga.`);
             }
             let dotnetInstaller;
             const uniqueVersions = new Set(versions);

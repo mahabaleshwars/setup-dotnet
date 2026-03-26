@@ -100,7 +100,9 @@ steps:
 
 ### Combining `latest` with `dotnet-quality`
 
-The `dotnet-quality` input works seamlessly with `latest`. Without it, `latest` defaults to stable (GA) versions only.
+The `dotnet-quality` input can be used with `latest` to install the latest build of a specific quality. Without it, `latest` defaults to stable (GA) versions only.
+
+> **Note**: `dotnet-quality` is not limited to the `latest` keyword — it can also be used with specific version formats. See [Using the `dotnet-quality` input](#using-the-dotnet-quality-input).
 
 **Install the latest preview version:**
 ```yaml
@@ -142,9 +144,18 @@ steps:
 ```
 
 ## Using the `dotnet-quality` input
-This input sets up the action to install the latest build of the specified quality in the channel. The possible values of `dotnet-quality` are: **daily**, **signed**, **validated**, **preview**, **ga**.
 
-> **Note**: `dotnet-quality` input can be used only with .NET SDK version in 'A.B', 'A.B.x', 'A', 'A.x' and 'A.B.Cxx' formats where the major version is higher than 5. In other cases, `dotnet-quality` input will be ignored.
+The `dotnet-quality` input installs the latest build of the specified quality in the channel. It can be used with specific version formats or with `dotnet-version: latest` (see [Combining `latest` with `dotnet-quality`](#combining-latest-with-dotnet-quality)).
+
+The possible values of `dotnet-quality` are:
+
+| Value | Description |
+|-------|-------------|
+| `daily` | Latest daily build from the build pipeline |
+| `preview` | Latest preview or release candidate (RC) build |
+| `ga` | Latest General Availability (stable) release |
+
+> **Note**: When used with a specific SDK version, `dotnet-quality` supports only `A.B`, `A.B.x`, `A`, `A.x`, and `A.B.Cxx` formats where the major version is higher than 5. For all other formats, `dotnet-quality` will be ignored.
 
 ```yml
 steps:

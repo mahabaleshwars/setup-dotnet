@@ -15,13 +15,7 @@ import {restoreCache} from './cache-restore';
 import {Outputs} from './constants';
 import JSON5 from 'json5';
 
-const qualityOptions = [
-  'daily',
-  'signed',
-  'validated',
-  'preview',
-  'ga'
-] as const;
+const qualityOptions = ['daily', 'preview', 'ga'] as const;
 const supportedArchitectures = [
   'x64',
   'x86',
@@ -90,7 +84,7 @@ export async function run() {
 
       if (quality && !qualityOptions.includes(quality)) {
         throw new Error(
-          `Value '${quality}' is not supported for the 'dotnet-quality' option. Supported values are: daily, signed, validated, preview, ga.`
+          `Value '${quality}' is not supported for the 'dotnet-quality' option. Supported values are: daily, preview, ga.`
         );
       }
 
