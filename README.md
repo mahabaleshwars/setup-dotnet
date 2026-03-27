@@ -76,7 +76,7 @@ steps:
 
 The optional `dotnet-channel` input filters the `latest` version by release type. Supported values: `LTS` (Long Term Support) and `STS` (Standard Term Support).
 
-> **Note**: The `dotnet-channel` input is only used when `dotnet-version` is set to `latest`. If used with a specific version, a warning will be logged and the channel input will be ignored.
+> **Note**: The `dotnet-channel` input is only applied when `dotnet-version` is set to `latest`. If used with a specific version, a warning will be logged and the channel input will be ignored. If an unsupported value is provided alongside `dotnet-version: latest`, the action will fail.
 
 **Install latest LTS version:**
 ```yaml

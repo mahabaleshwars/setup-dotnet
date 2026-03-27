@@ -46,13 +46,22 @@ export async function run() {
     const architecture = getArchitectureInput();
     const dotnetChannel = core.getInput('dotnet-channel');
 
+    const isLatestRequested = versions.some(
+      version => version && version.toLowerCase() === 'latest'
+    );
     if (
       dotnetChannel &&
       !['LTS', 'STS'].includes(dotnetChannel.toUpperCase())
     ) {
-      throw new Error(
-        `Value '${dotnetChannel}' is not supported for the 'dotnet-channel' option. Supported values are: LTS, STS.`
-      );
+      if (isLatestRequested) {
+        throw new Error(
+          `Value '${dotnetChannel}' is not supported for the 'dotnet-channel' option. Supported values are: LTS, STS.`
+        );
+      } else {
+        core.warning(
+          `Value '${dotnetChannel}' is not supported for the 'dotnet-channel' option and will be ignored because 'dotnet-version' is not set to 'latest'. Supported values are: LTS, STS.`
+        );
+      }
     }
 
     const globalJsonFileInput = core.getInput('global-json-file');
