@@ -63,6 +63,11 @@ export async function run() {
         );
         dotnetChannel = '';
       }
+    } else if (dotnetChannel && !isLatestRequested) {
+      core.warning(
+        `The 'dotnet-channel' input is only supported when 'dotnet-version' is set to 'latest'. The value '${dotnetChannel}' will be ignored.`
+      );
+      dotnetChannel = '';
     }
 
     const globalJsonFileInput = core.getInput('global-json-file');

@@ -295,5 +295,20 @@ describe('setup-dotnet tests', () => {
       await setup.run();
       expect(setFailedSpy).not.toHaveBeenCalled();
     });
+
+    it('should warn and not fail if valid dotnet-channel is provided with a non-latest version', async () => {
+      inputs['dotnet-version'] = ['8.0.x'];
+      inputs['dotnet-quality'] = '';
+      inputs['dotnet-channel'] = 'LTS';
+      inputs['architecture'] = '';
+
+      installDotnetSpy.mockImplementation(() => Promise.resolve(''));
+
+      await setup.run();
+      expect(setFailedSpy).not.toHaveBeenCalled();
+      expect(warningSpy).toHaveBeenCalledWith(
+        `The 'dotnet-channel' input is only supported when 'dotnet-version' is set to 'latest'. The value 'LTS' will be ignored.`
+      );
+    });
   });
 });
