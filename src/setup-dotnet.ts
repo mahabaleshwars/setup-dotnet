@@ -44,7 +44,7 @@ export async function run() {
     const versions = core.getMultilineInput('dotnet-version');
     const installedDotnetVersions: (string | null)[] = [];
     const architecture = getArchitectureInput();
-    const dotnetChannel = core.getInput('dotnet-channel');
+    let dotnetChannel = core.getInput('dotnet-channel');
 
     const isLatestRequested = versions.some(
       version => version && version.toLowerCase() === 'latest'
@@ -61,6 +61,7 @@ export async function run() {
         core.warning(
           `Value '${dotnetChannel}' is not supported for the 'dotnet-channel' option and will be ignored because 'dotnet-version' is not set to 'latest'. Supported values are: LTS, STS.`
         );
+        dotnetChannel = '';
       }
     }
 
