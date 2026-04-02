@@ -55240,7 +55240,7 @@ async function run() {
             let dotnetInstaller;
             const uniqueVersions = new Set(versions);
             for (const version of uniqueVersions) {
-                dotnetInstaller = new installer_1.DotnetCoreInstaller(version, quality, architecture, dotnetChannel);
+                dotnetInstaller = new installer_1.DotnetCoreInstaller(version, quality, architecture, version.toLowerCase() === 'latest' ? dotnetChannel : undefined);
                 const installedVersion = await dotnetInstaller.installDotnet();
                 installedDotnetVersions.push(installedVersion);
             }

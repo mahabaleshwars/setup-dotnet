@@ -1,6 +1,5 @@
 import {DotnetVersionResolver} from '../src/installer';
 import * as hc from '@actions/http-client';
-import {QualityOptions} from '../src/setup-dotnet';
 import * as core from '@actions/core';
 
 // Mock http-client
@@ -75,10 +74,7 @@ describe('DotnetVersionResolver with latest', () => {
   it('should resolve "latest" to highest preview version if quality is preview', async () => {
     getJsonMock.mockResolvedValue({result: mockReleases});
 
-    const resolver = new DotnetVersionResolver(
-      'latest',
-      'preview' as QualityOptions
-    );
+    const resolver = new DotnetVersionResolver('latest', 'preview');
     const version = await resolver.createDotnetVersion();
 
     expect(version.value).toBe('10.0');
@@ -87,11 +83,7 @@ describe('DotnetVersionResolver with latest', () => {
   it('should resolve "latest" with channel filter LTS', async () => {
     getJsonMock.mockResolvedValue({result: mockReleases});
 
-    const resolver = new DotnetVersionResolver(
-      'latest',
-      '' as QualityOptions,
-      'LTS'
-    );
+    const resolver = new DotnetVersionResolver('latest', '', 'LTS');
     const version = await resolver.createDotnetVersion();
 
     expect(version.value).toBe('9.0');
@@ -100,11 +92,7 @@ describe('DotnetVersionResolver with latest', () => {
   it('should resolve "latest" with channel filter STS', async () => {
     getJsonMock.mockResolvedValue({result: mockReleases});
 
-    const resolver = new DotnetVersionResolver(
-      'latest',
-      '' as QualityOptions,
-      'STS'
-    );
+    const resolver = new DotnetVersionResolver('latest', '', 'STS');
     const version = await resolver.createDotnetVersion();
 
     expect(version.value).toBe('8.0');
@@ -113,11 +101,7 @@ describe('DotnetVersionResolver with latest', () => {
   it('should resolve "latest" with channel filter STS and preview quality', async () => {
     getJsonMock.mockResolvedValue({result: mockReleases});
 
-    const resolver = new DotnetVersionResolver(
-      'latest',
-      'preview' as QualityOptions,
-      'STS'
-    );
+    const resolver = new DotnetVersionResolver('latest', 'preview', 'STS');
     const version = await resolver.createDotnetVersion();
 
     expect(version.value).toBe('10.0');
@@ -126,11 +110,7 @@ describe('DotnetVersionResolver with latest', () => {
   it('should warn if channel is provided but version is not latest', async () => {
     getJsonMock.mockResolvedValue({result: mockReleases});
 
-    const resolver = new DotnetVersionResolver(
-      '8.0',
-      '' as QualityOptions,
-      'LTS'
-    );
+    const resolver = new DotnetVersionResolver('8.0', '', 'LTS');
     await resolver.createDotnetVersion();
 
     expect(warningSpy).toHaveBeenCalledWith(expect.stringContaining('ignored'));
@@ -178,10 +158,7 @@ describe('DotnetVersionResolver with latest', () => {
   it('should resolve "latest" with ga quality same as default (no previews)', async () => {
     getJsonMock.mockResolvedValue({result: mockReleases});
 
-    const resolver = new DotnetVersionResolver(
-      'latest',
-      'ga' as QualityOptions
-    );
+    const resolver = new DotnetVersionResolver('latest', 'ga');
     const version = await resolver.createDotnetVersion();
 
     // ga should behave like no quality — skip preview (10.0), pick 9.0
@@ -191,11 +168,7 @@ describe('DotnetVersionResolver with latest', () => {
   it('should resolve "latest" with LTS channel and daily quality', async () => {
     getJsonMock.mockResolvedValue({result: mockReleases});
 
-    const resolver = new DotnetVersionResolver(
-      'latest',
-      'daily' as QualityOptions,
-      'LTS'
-    );
+    const resolver = new DotnetVersionResolver('latest', 'daily', 'LTS');
     const version = await resolver.createDotnetVersion();
 
     // daily allows previews, but LTS filter applies — 9.0 is the only LTS

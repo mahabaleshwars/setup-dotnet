@@ -34,7 +34,7 @@ export class DotnetVersionResolver {
 
   constructor(
     version: string,
-    private quality: QualityOptions = '' as QualityOptions,
+    private quality: QualityOptions = '',
     private dotnetChannel?: string
   ) {
     this.inputVersion = version.trim();

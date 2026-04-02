@@ -28,7 +28,7 @@ const supportedArchitectures = [
 ] as const;
 type SupportedArchitecture = (typeof supportedArchitectures)[number];
 
-export type QualityOptions = (typeof qualityOptions)[number];
+export type QualityOptions = (typeof qualityOptions)[number] | '';
 
 export async function run() {
   try {
@@ -105,7 +105,7 @@ export async function run() {
           version,
           quality,
           architecture,
-          dotnetChannel
+          version.toLowerCase() === 'latest' ? dotnetChannel : undefined
         );
         const installedVersion = await dotnetInstaller.installDotnet();
         installedDotnetVersions.push(installedVersion);
