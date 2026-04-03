@@ -54796,9 +54796,26 @@ class DotnetVersionResolver {
         this.inputVersion = version.trim();
         this.resolvedArgument = { type: '', value: '', qualityFlag: false };
     }
+    isVersionChannel(channel) {
+        // A.B format (e.g., 3.1, 8.0)
+        if (/^\d+\.\d+$/.test(channel))
+            return true;
+        // A.B.Cxx format (e.g., 8.0.1xx)
+        if (/^\d+\.\d+\.\d{1}xx$/.test(channel))
+            return true;
+        return false;
+    }
     async resolveVersionInput() {
         if (this.inputVersion.toLowerCase() === 'latest') {
-            this.resolvedArgument.value = await this.getLatestVersion(this.dotnetChannel || '');
+            const channel = this.dotnetChannel || '';
+            if (this.isVersionChannel(channel)) {
+                // A.B or A.B.Cxx channels are passed directly to the install script
+                this.resolvedArgument.value = channel;
+            }
+            else {
+                // LTS, STS, or empty — resolve via releases index API
+                this.resolvedArgument.value = await this.getLatestVersion(channel);
+            }
             this.resolvedArgument.type = 'channel';
             const latestChannelMajorTag = Number(this.resolvedArgument.value.split('.')[0]);
             this.resolvedArgument.qualityFlag =
@@ -55187,6 +55204,19 @@ const supportedArchitectures = [
     'ppc64le',
     'riscv64'
 ];
+function isValidChannel(channel) {
+    const upper = channel.toUpperCase();
+    if (upper === 'LTS' || upper === 'STS')
+        return true;
+    // A.B format (e.g., 3.1, 8.0)
+    if (/^\d+\.\d+$/.test(channel))
+        return true;
+    // A.B.Cxx format (e.g., 8.0.1xx) - available since 5.0
+    const match = channel.match(/^(?<major>\d+)\.\d+\.\d{1}xx$/);
+    if (match && parseInt(match.groups.major) >= 5)
+        return true;
+    return false;
+}
 async function run() {
     try {
         //
@@ -55203,13 +55233,12 @@ async function run() {
         const architecture = getArchitectureInput();
         let dotnetChannel = core.getInput('dotnet-channel');
         const isLatestRequested = versions.some(version => version && version.toLowerCase() === 'latest');
-        if (dotnetChannel &&
-            !['LTS', 'STS'].includes(dotnetChannel.toUpperCase())) {
+        if (dotnetChannel && !isValidChannel(dotnetChannel)) {
             if (isLatestRequested) {
-                throw new Error(`Value '${dotnetChannel}' is not supported for the 'dotnet-channel' option. Supported values are: LTS, STS.`);
+                throw new Error(`Value '${dotnetChannel}' is not supported for the 'dotnet-channel' option. Supported values are: LTS, STS, A.B (e.g. 8.0), A.B.Cxx (e.g. 8.0.1xx).`);
             }
             else {
-                core.warning(`Value '${dotnetChannel}' is not supported for the 'dotnet-channel' option and will be ignored because 'dotnet-version' is not set to 'latest'. Supported values are: LTS, STS.`);
+                core.warning(`Value '${dotnetChannel}' is not supported for the 'dotnet-channel' option and will be ignored because 'dotnet-version' is not set to 'latest'. Supported values are: LTS, STS, A.B (e.g. 8.0), A.B.Cxx (e.g. 8.0.1xx).`);
                 dotnetChannel = '';
             }
         }
