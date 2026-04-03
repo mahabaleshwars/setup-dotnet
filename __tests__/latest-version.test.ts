@@ -175,4 +175,46 @@ describe('DotnetVersionResolver with latest', () => {
     expect(version.value).toBe('9.0');
     expect(version.qualityFlag).toBe(true);
   });
+
+  it('should resolve "latest" with A.B channel directly without API call', async () => {
+    const resolver = new DotnetVersionResolver('latest', '', '8.0');
+    const version = await resolver.createDotnetVersion();
+
+    expect(version.value).toBe('8.0');
+    expect(version.type.toLowerCase()).toContain('channel');
+    expect(version.qualityFlag).toBe(true);
+    // Should NOT call the API
+    expect(getJsonMock).not.toHaveBeenCalled();
+  });
+
+  it('should resolve "latest" with A.B.Cxx channel directly without API call', async () => {
+    const resolver = new DotnetVersionResolver('latest', '', '8.0.1xx');
+    const version = await resolver.createDotnetVersion();
+
+    expect(version.value).toBe('8.0.1xx');
+    expect(version.type.toLowerCase()).toContain('channel');
+    expect(version.qualityFlag).toBe(true);
+    // Should NOT call the API
+    expect(getJsonMock).not.toHaveBeenCalled();
+  });
+
+  it('should resolve "latest" with A.B channel for older version with qualityFlag false', async () => {
+    const resolver = new DotnetVersionResolver('latest', '', '3.1');
+    const version = await resolver.createDotnetVersion();
+
+    expect(version.value).toBe('3.1');
+    expect(version.type.toLowerCase()).toContain('channel');
+    // major 3 < 6 → qualityFlag false
+    expect(version.qualityFlag).toBe(false);
+    expect(getJsonMock).not.toHaveBeenCalled();
+  });
+
+  it('should resolve "latest" with A.B.Cxx channel and quality', async () => {
+    const resolver = new DotnetVersionResolver('latest', 'ga', '8.0.2xx');
+    const version = await resolver.createDotnetVersion();
+
+    expect(version.value).toBe('8.0.2xx');
+    expect(version.qualityFlag).toBe(true);
+    expect(getJsonMock).not.toHaveBeenCalled();
+  });
 });

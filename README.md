@@ -74,7 +74,14 @@ steps:
 
 ### Using with `dotnet-channel`
 
-The optional `dotnet-channel` input filters the `latest` version by release type. Supported values: `LTS` (Long Term Support) and `STS` (Standard Term Support).
+The optional `dotnet-channel` input specifies the source channel for the installation. Supported values:
+
+| Value | Description |
+|-------|-------------|
+| `STS` | The most recent Standard Term Support release |
+| `LTS` | The most recent Long Term Support release |
+| `A.B` (e.g. `8.0`) | A specific release channel |
+| `A.B.Cxx` (e.g. `8.0.1xx`) | A specific SDK release (available since 5.0) |
 
 > **Note**: The `dotnet-channel` input is only applied when `dotnet-version` is set to `latest`. If used with a specific version, a warning will be logged and the channel input will be ignored. If an unsupported value is provided alongside `dotnet-version: latest`, the action will fail.
 
@@ -96,6 +103,26 @@ steps:
   with:
     dotnet-version: latest
     dotnet-channel: STS
+```
+
+**Install latest SDK from the 8.0 channel:**
+```yaml
+steps:
+- uses: actions/checkout@v6
+- uses: actions/setup-dotnet@v5
+  with:
+    dotnet-version: latest
+    dotnet-channel: '8.0'
+```
+
+**Install latest SDK from a specific SDK band (A.B.Cxx):**
+```yaml
+steps:
+- uses: actions/checkout@v6
+- uses: actions/setup-dotnet@v5
+  with:
+    dotnet-version: latest
+    dotnet-channel: '8.0.1xx'
 ```
 
 ### Combining `latest` with `dotnet-quality`

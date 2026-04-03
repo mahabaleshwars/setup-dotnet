@@ -263,7 +263,7 @@ describe('setup-dotnet tests', () => {
       inputs['dotnet-channel'] = 'invalid';
       inputs['architecture'] = '';
 
-      const expectedErrorMessage = `Value 'invalid' is not supported for the 'dotnet-channel' option. Supported values are: LTS, STS.`;
+      const expectedErrorMessage = `Value 'invalid' is not supported for the 'dotnet-channel' option. Supported values are: LTS, STS, A.B (e.g. 8.0), A.B.Cxx (e.g. 8.0.1xx).`;
 
       await setup.run();
       expect(setFailedSpy).toHaveBeenCalledWith(expectedErrorMessage);
@@ -280,7 +280,7 @@ describe('setup-dotnet tests', () => {
       await setup.run();
       expect(setFailedSpy).not.toHaveBeenCalled();
       expect(warningSpy).toHaveBeenCalledWith(
-        `Value 'invalid' is not supported for the 'dotnet-channel' option and will be ignored because 'dotnet-version' is not set to 'latest'. Supported values are: LTS, STS.`
+        `Value 'invalid' is not supported for the 'dotnet-channel' option and will be ignored because 'dotnet-version' is not set to 'latest'. Supported values are: LTS, STS, A.B (e.g. 8.0), A.B.Cxx (e.g. 8.0.1xx).`
       );
     });
 
@@ -294,6 +294,42 @@ describe('setup-dotnet tests', () => {
 
       await setup.run();
       expect(setFailedSpy).not.toHaveBeenCalled();
+    });
+
+    it('should pass A.B channel value through without error when used with latest', async () => {
+      inputs['dotnet-version'] = ['latest'];
+      inputs['dotnet-quality'] = '';
+      inputs['dotnet-channel'] = '8.0';
+      inputs['architecture'] = '';
+
+      installDotnetSpy.mockImplementation(() => Promise.resolve(''));
+
+      await setup.run();
+      expect(setFailedSpy).not.toHaveBeenCalled();
+    });
+
+    it('should pass A.B.Cxx channel value through without error when used with latest', async () => {
+      inputs['dotnet-version'] = ['latest'];
+      inputs['dotnet-quality'] = '';
+      inputs['dotnet-channel'] = '8.0.1xx';
+      inputs['architecture'] = '';
+
+      installDotnetSpy.mockImplementation(() => Promise.resolve(''));
+
+      await setup.run();
+      expect(setFailedSpy).not.toHaveBeenCalled();
+    });
+
+    it('should fail with A.B.Cxx channel if major version is below 5', async () => {
+      inputs['dotnet-version'] = ['latest'];
+      inputs['dotnet-quality'] = '';
+      inputs['dotnet-channel'] = '3.1.1xx';
+      inputs['architecture'] = '';
+
+      const expectedErrorMessage = `Value '3.1.1xx' is not supported for the 'dotnet-channel' option. Supported values are: LTS, STS, A.B (e.g. 8.0), A.B.Cxx (e.g. 8.0.1xx).`;
+
+      await setup.run();
+      expect(setFailedSpy).toHaveBeenCalledWith(expectedErrorMessage);
     });
 
     it('should warn and not fail if valid dotnet-channel is provided with a non-latest version', async () => {

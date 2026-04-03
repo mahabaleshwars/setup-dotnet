@@ -10,7 +10,7 @@ inputs:
   dotnet-quality:
     description: 'Optional quality of the build. The possible values are: daily, preview, ga.'
   dotnet-channel:
-    description: 'Optional channel release to use. The possible values are: LTS, STS. To be used with "dotnet-version: latest".'
+    description: 'Optional channel for the installation. The possible values are: STS, LTS, A.B (e.g. 8.0), A.B.Cxx (e.g. 8.0.1xx, available since 5.0). To be used with "dotnet-version: latest".'
   global-json-file:
     description: 'Optional global.json location, if your global.json isn''t located in the root of the repo.'
   source-url:

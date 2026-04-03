@@ -41,11 +41,24 @@ export class DotnetVersionResolver {
     this.resolvedArgument = {type: '', value: '', qualityFlag: false};
   }
 
+  private isVersionChannel(channel: string): boolean {
+    // A.B format (e.g., 3.1, 8.0)
+    if (/^\d+\.\d+$/.test(channel)) return true;
+    // A.B.Cxx format (e.g., 8.0.1xx)
+    if (/^\d+\.\d+\.\d{1}xx$/.test(channel)) return true;
+    return false;
+  }
+
   private async resolveVersionInput(): Promise<void> {
     if (this.inputVersion.toLowerCase() === 'latest') {
-      this.resolvedArgument.value = await this.getLatestVersion(
-        this.dotnetChannel || ''
-      );
+      const channel = this.dotnetChannel || '';
+      if (this.isVersionChannel(channel)) {
+        // A.B or A.B.Cxx channels are passed directly to the install script
+        this.resolvedArgument.value = channel;
+      } else {
+        // LTS, STS, or empty — resolve via releases index API
+        this.resolvedArgument.value = await this.getLatestVersion(channel);
+      }
       this.resolvedArgument.type = 'channel';
       const latestChannelMajorTag = Number(
         this.resolvedArgument.value.split('.')[0]
