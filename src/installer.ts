@@ -71,7 +71,7 @@ export class DotnetVersionResolver {
 
     if (this.dotnetChannel) {
       core.warning(
-        `The 'dotnet-channel' input is only supported when 'dotnet-version' is set to 'latest'. The value '${this.dotnetChannel}' will be ignored.`
+        `The 'dotnet-channel' input is only supported when 'dotnet-version' is set to 'latest'.`
       );
     }
 

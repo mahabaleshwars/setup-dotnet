@@ -113,7 +113,9 @@ describe('DotnetVersionResolver with latest', () => {
     const resolver = new DotnetVersionResolver('8.0', '', 'LTS');
     await resolver.createDotnetVersion();
 
-    expect(warningSpy).toHaveBeenCalledWith(expect.stringContaining('ignored'));
+    expect(warningSpy).toHaveBeenCalledWith(
+      `The 'dotnet-channel' input is only supported when 'dotnet-version' is set to 'latest'.`
+    );
   });
 
   it('should throw when releases-index API returns empty active releases', async () => {

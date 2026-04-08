@@ -54824,7 +54824,7 @@ class DotnetVersionResolver {
             return;
         }
         if (this.dotnetChannel) {
-            core.warning(`The 'dotnet-channel' input is only supported when 'dotnet-version' is set to 'latest'. The value '${this.dotnetChannel}' will be ignored.`);
+            core.warning(`The 'dotnet-channel' input is only supported when 'dotnet-version' is set to 'latest'.`);
         }
         if (!semver_1.default.validRange(this.inputVersion) && !this.isLatestPatchSyntax()) {
             throw new Error(`The 'dotnet-version' was supplied in invalid format: ${this.inputVersion}! Supported syntax: A.B.C, A.B, A.B.x, A, A.x, A.B.Cxx`);
@@ -55243,7 +55243,7 @@ async function run() {
             }
         }
         else if (dotnetChannel && !isLatestRequested) {
-            core.warning(`The 'dotnet-channel' input is only supported when 'dotnet-version' is set to 'latest'. The value '${dotnetChannel}' will be ignored.`);
+            core.warning(`The 'dotnet-channel' input is only supported when 'dotnet-version' is set to 'latest'.`);
             dotnetChannel = '';
         }
         const globalJsonFileInput = core.getInput('global-json-file');
