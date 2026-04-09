@@ -95,36 +95,6 @@ steps:
     dotnet-channel: LTS
 ```
 
-**Install latest STS version:**
-```yaml
-steps:
-- uses: actions/checkout@v6
-- uses: actions/setup-dotnet@v5
-  with:
-    dotnet-version: latest
-    dotnet-channel: STS
-```
-
-**Install latest SDK from the 8.0 channel:**
-```yaml
-steps:
-- uses: actions/checkout@v6
-- uses: actions/setup-dotnet@v5
-  with:
-    dotnet-version: latest
-    dotnet-channel: '8.0'
-```
-
-**Install latest SDK from a specific SDK band (A.B.Cxx):**
-```yaml
-steps:
-- uses: actions/checkout@v6
-- uses: actions/setup-dotnet@v5
-  with:
-    dotnet-version: latest
-    dotnet-channel: '8.0.1xx'
-```
-
 ### Combining `latest` with `dotnet-quality`
 
 The `dotnet-quality` input can be used with `latest` to install the latest build of a specific quality. Without it, `latest` defaults to stable (GA) versions only.

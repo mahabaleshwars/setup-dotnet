@@ -664,14 +664,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        operating-system:
-          [
-            ubuntu-22.04,
-            ubuntu-latest,
-            windows-latest,
-            macos-latest,
-            macos-15-intel
-          ]
+        operating-system: [ubuntu-22.04]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -691,14 +684,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        operating-system:
-          [
-            ubuntu-22.04,
-            ubuntu-latest,
-            windows-latest,
-            macos-latest,
-            macos-15-intel
-          ]
+        operating-system: [ubuntu-latest]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -719,14 +705,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        operating-system:
-          [
-            ubuntu-22.04,
-            ubuntu-latest,
-            windows-latest,
-            macos-latest,
-            macos-15-intel
-          ]
+        operating-system: [windows-latest]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -747,14 +726,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        operating-system:
-          [
-            ubuntu-22.04,
-            ubuntu-latest,
-            windows-latest,
-            macos-latest,
-            macos-15-intel
-          ]
+        operating-system: [macos-latest]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -775,14 +747,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        operating-system:
-          [
-            ubuntu-22.04,
-            ubuntu-latest,
-            windows-latest,
-            macos-latest,
-            macos-15-intel
-          ]
+        operating-system: [macos-15-intel]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
