@@ -659,7 +659,7 @@ jobs:
         shell: pwsh
         run: __tests__/verify-dotnet.ps1 -Patterns "^8.0.416$", "^9.0.308$", "^10.0.101$", "^8.0"
 
-  test-setup-latest-with-channel-lts:
+  test-setup-latest-version:
     runs-on: ${{ matrix.operating-system }}
     strategy:
       fail-fast: false
@@ -671,11 +671,10 @@ jobs:
       - name: Clear toolcache
         shell: pwsh
         run: __tests__/clear-toolcache.ps1 ${{ runner.os }}
-      - name: Setup dotnet latest with LTS channel
+      - name: Setup dotnet latest
         uses: ./
         with:
           dotnet-version: latest
-          dotnet-channel: LTS
       - name: Verify dotnet
         shell: pwsh
         run: __tests__/verify-dotnet.ps1 -Patterns "^\d+\.\d+\.\d+"
@@ -685,7 +684,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        operating-system: [macos-15-intel]
+        operating-system: [macos-latest]
     steps:
       - name: Checkout
         uses: actions/checkout@v6

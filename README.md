@@ -111,11 +111,11 @@ steps:
 - uses: actions/setup-dotnet@v5
   with:
     dotnet-version: '8.0.x'
-    dotnet-quality: 'preview'
+    dotnet-quality: 'daily'
 - run: dotnet build <my project>
 ```
 
-`dotnet-quality` can also be combined with `dotnet-version: latest` and `dotnet-channel` to target specific builds such as the latest `preview` build from the `LTS` channel.
+`dotnet-quality` can also be combined with `dotnet-version: latest` and `dotnet-channel` to target specific builds such as the latest `daily` build from the `LTS` channel.
 
 ```yaml
 steps:
