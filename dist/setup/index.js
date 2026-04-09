@@ -55271,7 +55271,7 @@ async function run() {
                 throw new Error(`Value '${quality}' is not supported for the 'dotnet-quality' option. Supported values are: daily, preview, ga.`);
             }
             let dotnetInstaller;
-            const uniqueVersions = new Set(versions);
+            const uniqueVersions = new Set(versions.map(v => (v.toLowerCase() === 'latest' ? 'latest' : v)));
             for (const version of uniqueVersions) {
                 dotnetInstaller = new installer_1.DotnetCoreInstaller(version, quality, architecture, version.toLowerCase() === 'latest' ? dotnetChannel : undefined);
                 const installedVersion = await dotnetInstaller.installDotnet();

@@ -112,7 +112,9 @@ export async function run() {
       }
 
       let dotnetInstaller: DotnetCoreInstaller;
-      const uniqueVersions = new Set<string>(versions);
+      const uniqueVersions = new Set<string>(
+        versions.map(v => (v.toLowerCase() === 'latest' ? 'latest' : v))
+      );
       for (const version of uniqueVersions) {
         dotnetInstaller = new DotnetCoreInstaller(
           version,
