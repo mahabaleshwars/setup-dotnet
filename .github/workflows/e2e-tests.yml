@@ -659,30 +659,18 @@ jobs:
         shell: pwsh
         run: __tests__/verify-dotnet.ps1 -Patterns "^8.0.416$", "^9.0.308$", "^10.0.101$", "^8.0"
 
-  test-setup-latest-version:
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-      - name: Clear toolcache
-        shell: pwsh
-        run: __tests__/clear-toolcache.ps1
-      - name: Setup dotnet latest
-        uses: ./
-        with:
-          dotnet-version: latest
-      - name: Verify dotnet
-        shell: pwsh
-        run: __tests__/verify-dotnet.ps1 -Patterns "^\d+\.\d+\.\d+"
-
   test-setup-latest-with-channel-lts:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.operating-system }}
+    strategy:
+      fail-fast: false
+      matrix:
+        operating-system: [ubuntu-latest]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
       - name: Clear toolcache
         shell: pwsh
-        run: __tests__/clear-toolcache.ps1
+        run: __tests__/clear-toolcache.ps1 ${{ runner.os }}
       - name: Setup dotnet latest with LTS channel
         uses: ./
         with:
@@ -692,48 +680,18 @@ jobs:
         shell: pwsh
         run: __tests__/verify-dotnet.ps1 -Patterns "^\d+\.\d+\.\d+"
 
-  test-setup-latest-with-channel-sts:
-    runs-on: windows-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-      - name: Clear toolcache
-        shell: pwsh
-        run: __tests__/clear-toolcache.ps1
-      - name: Setup dotnet latest with STS channel
-        uses: ./
-        with:
-          dotnet-version: latest
-          dotnet-channel: STS
-      - name: Verify dotnet
-        shell: pwsh
-        run: __tests__/verify-dotnet.ps1 -Patterns "^\d+\.\d+\.\d+"
-
-  test-setup-latest-with-channel-version:
-    runs-on: macos-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-      - name: Clear toolcache
-        shell: pwsh
-        run: __tests__/clear-toolcache.ps1
-      - name: Setup dotnet latest with A.B channel
-        uses: ./
-        with:
-          dotnet-version: latest
-          dotnet-channel: '9.0'
-      - name: Verify dotnet
-        shell: pwsh
-        run: __tests__/verify-dotnet.ps1 -Patterns "^9\.0"
-
   test-setup-latest-with-channel-abcxx:
-    runs-on: macos-15-intel
+    runs-on: ${{ matrix.operating-system }}
+    strategy:
+      fail-fast: false
+      matrix:
+        operating-system: [macos-15-intel]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
       - name: Clear toolcache
         shell: pwsh
-        run: __tests__/clear-toolcache.ps1
+        run: __tests__/clear-toolcache.ps1 ${{ runner.os }}
       - name: Setup dotnet latest with A.B.Cxx channel
         uses: ./
         with:
