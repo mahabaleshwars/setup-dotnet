@@ -54800,9 +54800,12 @@ class DotnetVersionResolver {
         // A.B format (e.g., 3.1, 8.0)
         if (/^\d+\.\d+$/.test(channel))
             return true;
-        // A.B.Cxx format (e.g., 8.0.1xx)
-        if (/^\d+\.\d+\.\d{1}xx$/.test(channel))
-            return true;
+        // A.B.Cxx format (e.g., 8.0.1xx) is supported only for .NET 5.0+
+        const latestPatchMatch = channel.match(/^(\d+)\.\d+\.\d{1}xx$/);
+        if (latestPatchMatch) {
+            const major = Number(latestPatchMatch[1]);
+            return (!Number.isNaN(major) && major >= LATEST_PATCH_SYNTAX_MINIMAL_MAJOR_TAG);
+        }
         return false;
     }
     async resolveVersionInput() {
