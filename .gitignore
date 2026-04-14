@@ -2,7 +2,6 @@
 global.json
 lib/
 node_modules/
-.DS_Store
 __tests__/runner/*
 __tests__/e2e-test-csproj/bin/
 __tests__/e2e-test-csproj/obj/
