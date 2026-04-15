@@ -54830,7 +54830,7 @@ class DotnetVersionResolver {
             core.warning(`The 'dotnet-channel' input is only supported when 'dotnet-version' is set to 'latest'.`);
         }
         if (!semver_1.default.validRange(this.inputVersion) && !this.isLatestPatchSyntax()) {
-            throw new Error(`The 'dotnet-version' was supplied in invalid format: ${this.inputVersion}! Supported syntax: A.B.C, A.B, A.B.x, A, A.x, A.B.Cxx`);
+            throw new Error(`The 'dotnet-version' was supplied in invalid format: ${this.inputVersion}! Supported syntax: A.B.C, A.B, A.B.x, A, A.x, A.B.Cxx, latest`);
         }
         if (semver_1.default.valid(this.inputVersion)) {
             this.createVersionArgument();

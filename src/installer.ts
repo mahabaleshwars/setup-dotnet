@@ -83,7 +83,7 @@ export class DotnetVersionResolver {
 
     if (!semver.validRange(this.inputVersion) && !this.isLatestPatchSyntax()) {
       throw new Error(
-        `The 'dotnet-version' was supplied in invalid format: ${this.inputVersion}! Supported syntax: A.B.C, A.B, A.B.x, A, A.x, A.B.Cxx`
+        `The 'dotnet-version' was supplied in invalid format: ${this.inputVersion}! Supported syntax: A.B.C, A.B, A.B.x, A, A.x, A.B.Cxx, latest`
       );
     }
     if (semver.valid(this.inputVersion)) {
