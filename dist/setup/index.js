@@ -44784,11 +44784,13 @@ const LATEST_PATCH_SYNTAX_MINIMAL_MAJOR_TAG = 5;
 class DotnetVersionResolver {
     quality;
     dotnetChannel;
+    inputName;
     inputVersion;
     resolvedArgument;
-    constructor(version, quality = '', dotnetChannel) {
+    constructor(version, quality = '', dotnetChannel, inputName = 'dotnet-version') {
         this.quality = quality;
         this.dotnetChannel = dotnetChannel;
+        this.inputName = inputName;
         this.inputVersion = version.trim();
         this.resolvedArgument = { type: '', value: '', qualityFlag: false };
     }
@@ -44826,7 +44828,7 @@ class DotnetVersionResolver {
             warning(`The 'dotnet-channel' input is only supported when 'dotnet-version' is set to 'latest'.`);
         }
         if (!semver_default().validRange(this.inputVersion) && !this.isLatestPatchSyntax()) {
-            throw new Error(`The 'dotnet-version' was supplied in invalid format: ${this.inputVersion}! Supported syntax: A.B.C, A.B, A.B.x, A, A.x, A.B.Cxx, latest`);
+            throw new Error(`The '${this.inputName}' was supplied in invalid format: ${this.inputVersion}! Supported syntax: A.B.C, A.B, A.B.x, A, A.x, A.B.Cxx, latest`);
         }
         if (semver_default().valid(this.inputVersion)) {
             this.createVersionArgument();
@@ -44842,7 +44844,7 @@ class DotnetVersionResolver {
         const majorTag = this.inputVersion.match(/^(?<majorTag>\d+)\.\d+\.\d{1}x{2}$/)?.groups?.majorTag;
         if (majorTag &&
             parseInt(majorTag) < LATEST_PATCH_SYNTAX_MINIMAL_MAJOR_TAG) {
-            throw new Error(`The 'dotnet-version' was supplied in invalid format: ${this.inputVersion}! The A.B.Cxx syntax is available since the .NET 5.0 release.`);
+            throw new Error(`The '${this.inputName}' was supplied in invalid format: ${this.inputVersion}! The A.B.Cxx syntax is available since the .NET 5.0 release.`);
         }
         return majorTag ? true : false;
     }
@@ -45114,7 +45116,7 @@ class DotnetCoreInstaller {
         return this.parseInstalledVersion(dotnetInstallOutput.stdout);
     }
     async installRuntime() {
-        const versionResolver = new DotnetVersionResolver(this.version, this.quality);
+        const versionResolver = new DotnetVersionResolver(this.version, this.quality, undefined, 'dotnet-runtime');
         const dotnetVersion = await versionResolver.createDotnetVersion();
         const architectureArguments = this.architecture &&
             normalizeArch(this.architecture) !== normalizeArch(external_os_default().arch())
@@ -105848,7 +105850,7 @@ async function run() {
         }
         if (runtimeVersions.length) {
             let dotnetInstaller;
-            const uniqueRuntimeVersions = new Set(runtimeVersions);
+            const uniqueRuntimeVersions = new Set(runtimeVersions.map(v => (v.toLowerCase() === 'latest' ? 'latest' : v)));
             for (const runtimeVersion of uniqueRuntimeVersions) {
                 dotnetInstaller = new DotnetCoreInstaller(runtimeVersion, quality, architecture);
                 const installedRuntimeVersion = await dotnetInstaller.installRuntime();
@@ -105868,7 +105870,9 @@ async function run() {
         if (sourceUrl) {
             configAuthentication(sourceUrl, configFile);
         }
-        outputInstalledVersion(installedDotnetVersions, globalJsonFileInput);
+        outputInstalledVersion(installedDotnetVersions.length
+            ? installedDotnetVersions
+            : installedRuntimeVersions, globalJsonFileInput);
         if (getBooleanInput('cache') && isCacheFeatureAvailable()) {
             const cacheDependencyPath = getInput('cache-dependency-path');
             await cache_restore_restoreCache(cacheDependencyPath);

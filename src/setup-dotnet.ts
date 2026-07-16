@@ -166,7 +166,9 @@ export async function run() {
 
     if (runtimeVersions.length) {
       let dotnetInstaller: DotnetCoreInstaller;
-      const uniqueRuntimeVersions = new Set<string>(runtimeVersions);
+      const uniqueRuntimeVersions = new Set<string>(
+        runtimeVersions.map(v => (v.toLowerCase() === 'latest' ? 'latest' : v))
+      );
       for (const runtimeVersion of uniqueRuntimeVersions) {
         dotnetInstaller = new DotnetCoreInstaller(
           runtimeVersion,
@@ -197,7 +199,12 @@ export async function run() {
       auth.configAuthentication(sourceUrl, configFile);
     }
 
-    outputInstalledVersion(installedDotnetVersions, globalJsonFileInput);
+    outputInstalledVersion(
+      installedDotnetVersions.length
+        ? installedDotnetVersions
+        : installedRuntimeVersions,
+      globalJsonFileInput
+    );
 
     if (core.getBooleanInput('cache') && isCacheFeatureAvailable()) {
       const cacheDependencyPath = core.getInput('cache-dependency-path');

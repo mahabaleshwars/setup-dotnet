@@ -77,9 +77,9 @@ steps:
 
 ## Supported version syntax
 
-The `dotnet-version` and `dotnet-runtime` inputs support following syntax:
+The `dotnet-version` and `dotnet-runtime` inputs support the following syntax:
 
-- **A.B.C** (e.g 9.0.308, 10.0.100-preview.1.25120.13) - installs exact version of .NET SDK or runtime
+- **A.B.C** (e.g 9.0.308 for an SDK, 9.0.9 for a runtime, 10.0.100-preview.1.25120.13) - installs exact version of .NET SDK or runtime
 - **A.B** or **A.B.x** (e.g. 8.0, 8.0.x) - installs the latest patch version on the channel `8.0`, including prerelease versions (preview, rc)
 - **A** or **A.x** (e.g. 8, 8.x) - installs the latest minor version of the specified major tag, including prerelease versions (preview, rc)
 - **A.B.Cxx** (e.g. 8.0.4xx) - available since `.NET 5.0` release. Installs the latest version of the specific release, including prerelease versions (preview, rc). 

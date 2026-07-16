@@ -36,7 +36,8 @@ export class DotnetVersionResolver {
   constructor(
     version: string,
     private quality: QualityOptions = '',
-    private dotnetChannel?: string
+    private dotnetChannel?: string,
+    private inputName: string = 'dotnet-version'
   ) {
     this.inputVersion = version.trim();
     this.resolvedArgument = {type: '', value: '', qualityFlag: false};
@@ -84,7 +85,7 @@ export class DotnetVersionResolver {
 
     if (!semver.validRange(this.inputVersion) && !this.isLatestPatchSyntax()) {
       throw new Error(
-        `The 'dotnet-version' was supplied in invalid format: ${this.inputVersion}! Supported syntax: A.B.C, A.B, A.B.x, A, A.x, A.B.Cxx, latest`
+        `The '${this.inputName}' was supplied in invalid format: ${this.inputVersion}! Supported syntax: A.B.C, A.B, A.B.x, A, A.x, A.B.Cxx, latest`
       );
     }
     if (semver.valid(this.inputVersion)) {
@@ -107,7 +108,7 @@ export class DotnetVersionResolver {
       parseInt(majorTag) < LATEST_PATCH_SYNTAX_MINIMAL_MAJOR_TAG
     ) {
       throw new Error(
-        `The 'dotnet-version' was supplied in invalid format: ${this.inputVersion}! The A.B.Cxx syntax is available since the .NET 5.0 release.`
+        `The '${this.inputName}' was supplied in invalid format: ${this.inputVersion}! The A.B.Cxx syntax is available since the .NET 5.0 release.`
       );
     }
     return majorTag ? true : false;
@@ -461,7 +462,9 @@ export class DotnetCoreInstaller {
   public async installRuntime(): Promise<string | null> {
     const versionResolver = new DotnetVersionResolver(
       this.version,
-      this.quality
+      this.quality,
+      undefined,
+      'dotnet-runtime'
     );
     const dotnetVersion = await versionResolver.createDotnetVersion();
 

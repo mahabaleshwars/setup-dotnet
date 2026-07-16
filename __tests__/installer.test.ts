@@ -863,6 +863,21 @@ describe('installer tests', () => {
           `'dotnet-version' was supplied in invalid format: ${version}! The A.B.Cxx syntax is available since the .NET 5.0 release.`
         );
       });
+
+      it(`should reference the provided input name in the invalid format error message`, async () => {
+        const version = 'invalid';
+        const dotnetVersionResolver = new installer.DotnetVersionResolver(
+          version,
+          '',
+          undefined,
+          'dotnet-runtime'
+        );
+        await expect(
+          async () => await dotnetVersionResolver.createDotnetVersion()
+        ).rejects.toThrow(
+          `The 'dotnet-runtime' was supplied in invalid format: ${version}!`
+        );
+      });
     });
   });
 });
