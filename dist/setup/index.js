@@ -105813,10 +105813,10 @@ async function run() {
             }
         }
         const quality = getInput('dotnet-quality');
-        if (quality && !qualityOptions.includes(quality)) {
-            throw new Error(`Value '${quality}' is not supported for the 'dotnet-quality' option. Supported values are: daily, preview, ga.`);
-        }
         if (versions.length) {
+            if (quality && !qualityOptions.includes(quality)) {
+                throw new Error(`Value '${quality}' is not supported for the 'dotnet-quality' option. Supported values are: daily, preview, ga.`);
+            }
             let dotnetInstaller;
             const uniqueVersions = new Set(versions.map(v => (v.toLowerCase() === 'latest' ? 'latest' : v)));
             for (const version of uniqueVersions) {

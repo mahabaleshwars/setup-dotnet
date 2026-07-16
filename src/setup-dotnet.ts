@@ -108,13 +108,13 @@ export async function run() {
 
     const quality = core.getInput('dotnet-quality') as QualityOptions;
 
-    if (quality && !qualityOptions.includes(quality)) {
-      throw new Error(
-        `Value '${quality}' is not supported for the 'dotnet-quality' option. Supported values are: daily, preview, ga.`
-      );
-    }
-
     if (versions.length) {
+      if (quality && !qualityOptions.includes(quality)) {
+        throw new Error(
+          `Value '${quality}' is not supported for the 'dotnet-quality' option. Supported values are: daily, preview, ga.`
+        );
+      }
+
       let dotnetInstaller: DotnetCoreInstaller;
       const uniqueVersions = new Set<string>(
         versions.map(v => (v.toLowerCase() === 'latest' ? 'latest' : v))

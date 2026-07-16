@@ -83,7 +83,7 @@ The `dotnet-version` and `dotnet-runtime` inputs support the following syntax:
 - **A.B** or **A.B.x** (e.g. 8.0, 8.0.x) - installs the latest patch version on the channel `8.0`, including prerelease versions (preview, rc)
 - **A** or **A.x** (e.g. 8, 8.x) - installs the latest minor version of the specified major tag, including prerelease versions (preview, rc)
 - **A.B.Cxx** (e.g. 8.0.4xx) - available since `.NET 5.0` release. Installs the latest version of the specific release, including prerelease versions (preview, rc). 
-- **latest** - dynamically resolves to the highest active .NET SDK version. By default, it installs the latest **stable (GA)** version (excluding previews and end-of-life releases). Can be combined with `dotnet-channel` and `dotnet-quality`.
+- **latest** - dynamically resolves to the highest active .NET version. By default, it installs the latest **stable (GA)** version (excluding previews and end-of-life releases). For `dotnet-version`, it can be combined with `dotnet-channel` and `dotnet-quality`.
 
 ## Using with `dotnet-channel` input
 
