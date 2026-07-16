@@ -451,6 +451,74 @@ export class DotnetCoreInstaller {
     return this.parseInstalledVersion(dotnetInstallOutput.stdout);
   }
 
+  public async installRuntime(): Promise<string | null> {
+    const versionResolver = new DotnetVersionResolver(
+      this.version,
+      this.quality
+    );
+    const dotnetVersion = await versionResolver.createDotnetVersion();
+
+    const architectureArguments =
+      this.architecture &&
+      normalizeArch(this.architecture) !== normalizeArch(os.arch())
+        ? [
+            IS_WINDOWS ? '-InstallDir' : '--install-dir',
+            IS_WINDOWS
+              ? `"${path.join(DotnetInstallDir.dirPath, this.architecture)}"`
+              : path.join(DotnetInstallDir.dirPath, this.architecture)
+          ]
+        : [];
+
+    /**
+     * Install .NET runtime (Microsoft.NETCore.App)
+     * Skip non-versioned files to avoid overwriting CLI
+     */
+    const dotnetRuntimeOutput = await new DotnetInstallScript()
+      .useArchitecture(this.architecture)
+      // If dotnet CLI is already installed - avoid overwriting it
+      .useArguments(
+        IS_WINDOWS ? '-SkipNonVersionedFiles' : '--skip-non-versioned-files'
+      )
+      // Install .NET runtime (Microsoft.NETCore.App)
+      .useArguments(IS_WINDOWS ? '-Runtime' : '--runtime', 'dotnet')
+      // Use version provided by user
+      .useVersion(dotnetVersion, this.quality)
+      .useArguments(...architectureArguments)
+      .execute();
+
+    if (dotnetRuntimeOutput.exitCode) {
+      throw new Error(
+        `Failed to install dotnet runtime, exit code: ${dotnetRuntimeOutput.exitCode}. ${dotnetRuntimeOutput.stderr}`
+      );
+    }
+
+    /**
+     * Install ASP.NET Core runtime (Microsoft.AspNetCore.App)
+     * Skip non-versioned files to avoid overwriting CLI
+     */
+    const aspnetcoreRuntimeOutput = await new DotnetInstallScript()
+      .useArchitecture(this.architecture)
+      // If dotnet CLI is already installed - avoid overwriting it
+      .useArguments(
+        IS_WINDOWS ? '-SkipNonVersionedFiles' : '--skip-non-versioned-files'
+      )
+      // Install ASP.NET Core runtime (Microsoft.AspNetCore.App)
+      .useArguments(IS_WINDOWS ? '-Runtime' : '--runtime', 'aspnetcore')
+      // Use version provided by user
+      .useVersion(dotnetVersion, this.quality)
+      .useArguments(...architectureArguments)
+      .execute();
+
+    if (aspnetcoreRuntimeOutput.exitCode) {
+      throw new Error(
+        `Failed to install aspnetcore runtime, exit code: ${aspnetcoreRuntimeOutput.exitCode}. ${aspnetcoreRuntimeOutput.stderr}`
+      );
+    }
+
+    // Return the .NET runtime version (both should be the same version)
+    return this.parseInstalledVersion(dotnetRuntimeOutput.stdout);
+  }
+
   private parseInstalledVersion(stdout: string): string | null {
     const regex = /(?<version>\d+\.\d+\.\d+[a-z0-9._-]*)/gm;
     const matchedResult = regex.exec(stdout);

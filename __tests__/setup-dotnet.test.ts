@@ -40,7 +40,9 @@ describe('setup-dotnet tests', () => {
   describe('run() tests', () => {
     beforeEach(() => {
       DotnetInstallDir.addToPath = jest.fn();
-      getMultilineInputSpy.mockImplementation(input => inputs[input as string]);
+      getMultilineInputSpy.mockImplementation(
+        input => inputs[input as string] ?? []
+      );
       getInputSpy.mockImplementation(input => inputs[input as string]);
       getBooleanInputSpy.mockImplementation(input => inputs[input as string]);
     });
