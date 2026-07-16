@@ -63,9 +63,9 @@ When `dotnet-runtime` is specified, both the .NET Runtime (Microsoft.NETCore.App
 **Example: Install SDK 10 with runtimes 8 and 9**:
 ```yml
 steps:
-- uses: actions/checkout@v6
+- uses: actions/checkout@v7
 - name: Setup dotnet
-  uses: actions/setup-dotnet@v5
+  uses: actions/setup-dotnet@v6
   with:
     dotnet-version: '10.0.x'
     dotnet-runtime: |
