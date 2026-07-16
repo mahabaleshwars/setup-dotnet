@@ -105808,7 +105808,7 @@ async function run() {
             if (external_fs_namespaceObject.existsSync(globalJsonPath)) {
                 versions.push(getVersionFromGlobalJson(globalJsonPath));
             }
-            else {
+            else if (!runtimeVersions.length) {
                 info(`The global.json wasn't found in the root directory. No .NET version will be installed.`);
             }
         }
