@@ -399,6 +399,25 @@ You can also set `DOTNET_INSTALL_DIR` to a value based on runtime variables, suc
 ```
 > **Note**: On some self-hosted or large Linux runners, installing .NET under the default `/usr/share/dotnet` location may fail due to insufficient permissions. To ensure successful installation, set `DOTNET_INSTALL_DIR` to a user-writable path.
 
+### Automatic fallback when the default location isn't writable
+
+When `DOTNET_INSTALL_DIR` is **not** set, the action installs .NET into the default location for the runner OS (see the table above). On self-hosted, larger, or containerized runners that run as a non-root / non-administrator user, that default location is often not writable, and the installation would previously fail with errors such as:
+
+```text
+mkdir: cannot create directory '/usr/share/dotnet': Permission denied
+Access to the path 'C:\Program Files\dotnet\...' is denied.
+```
+
+To handle this gracefully, the action now checks whether the default location is writable by the current user. If it isn't, it automatically falls back to a user-writable directory (`$HOME/.dotnet` on Linux/macOS, `%USERPROFILE%\.dotnet` on Windows) and logs a message explaining the change.
+
+The resolution order is:
+
+1. An explicit `DOTNET_INSTALL_DIR` environment variable (always respected, never overridden).
+2. The default location for the runner OS, when it is writable.
+3. `$HOME/.dotnet` (or `%USERPROFILE%\.dotnet` on Windows), when the default location isn't writable.
+
+This behavior is **not** a breaking change: GitHub-hosted runners can write to the default location, so their cached .NET versions continue to be used. The fallback only activates in scenarios that would otherwise have failed. To force a specific location, set `DOTNET_INSTALL_DIR` explicitly.
+
 ## Recommended permissions
 
 When using the `setup-dotnet` action in your GitHub Actions workflow, it is recommended to set the following permissions to ensure proper functionality:

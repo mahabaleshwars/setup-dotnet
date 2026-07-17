@@ -3,7 +3,7 @@ import * as core from '@actions/core';
 import * as exec from '@actions/exec';
 import * as io from '@actions/io';
 import * as hc from '@actions/http-client';
-import {chmodSync} from 'fs';
+import * as fs from 'fs';
 import path from 'path';
 import {fileURLToPath} from 'url';
 import os from 'os';
@@ -274,7 +274,7 @@ export class DotnetInstallScript {
   }
 
   private setupScriptBash() {
-    chmodSync(this.escapedScript, '777');
+    fs.chmodSync(this.escapedScript, '777');
   }
 
   private async getScriptPath() {
@@ -336,15 +336,107 @@ export class DotnetInstallScript {
 export abstract class DotnetInstallDir {
   private static readonly default = {
     linux: '/usr/share/dotnet',
-    mac: path.join(process.env['HOME'] + '', '.dotnet'),
+    mac: path.join(os.homedir(), '.dotnet'),
     windows: path.join(process.env['PROGRAMFILES'] + '', 'dotnet')
   };
 
-  public static readonly dirPath = process.env['DOTNET_INSTALL_DIR']
-    ? DotnetInstallDir.convertInstallPathToAbsolute(
+  /**
+   * User-writable fallback location used when the default OS install directory
+   * is not writable (e.g. non-root / self-hosted / larger runners). Kept
+   * consistent with the default macOS location so behaviour is predictable
+   * across platforms.
+   */
+  private static readonly fallback = path.join(os.homedir(), '.dotnet');
+
+  private static resolvedDirPath: string | undefined;
+
+  public static get dirPath(): string {
+    if (DotnetInstallDir.resolvedDirPath === undefined) {
+      DotnetInstallDir.resolvedDirPath = DotnetInstallDir.resolveDirPath();
+    }
+    return DotnetInstallDir.resolvedDirPath;
+  }
+
+  /**
+   * Resolves the directory where .NET should be installed following the
+   * priority order:
+   *   1. An explicit `DOTNET_INSTALL_DIR` environment variable (always honored).
+   *   2. The default OS location, when it is writable by the current user.
+   *   3. A user-writable fallback (`$HOME/.dotnet`) when the default location
+   *      cannot be written to.
+   *
+   * The parameters are only used to make the resolution logic testable in
+   * isolation; production code relies on the platform defaults.
+   */
+  public static resolveDirPath(
+    defaultPath: string = DotnetInstallDir.default[PLATFORM],
+    fallbackPath: string = DotnetInstallDir.fallback
+  ): string {
+    // 1. An explicit override always wins and is never second-guessed.
+    if (process.env['DOTNET_INSTALL_DIR']) {
+      return DotnetInstallDir.convertInstallPathToAbsolute(
         process.env['DOTNET_INSTALL_DIR']
-      )
-    : DotnetInstallDir.default[PLATFORM];
+      );
+    }
+
+    // 2. Prefer the default OS location when the user can write to it. This
+    // preserves the pre-installed .NET cache on GitHub-hosted runners.
+    if (DotnetInstallDir.isDirectoryWritable(defaultPath)) {
+      return defaultPath;
+    }
+
+    // 3. The default location is not writable. If there is no better option,
+    // keep the default rather than emitting a misleading message.
+    if (path.normalize(defaultPath) === path.normalize(fallbackPath)) {
+      return defaultPath;
+    }
+
+    // Fall back to a user-writable directory. This is not a breaking change
+    // because it only triggers in scenarios that previously failed.
+    core.info(
+      `The default .NET install directory '${defaultPath}' is not writable by the current user. Falling back to '${fallbackPath}'. Set the 'DOTNET_INSTALL_DIR' environment variable to override this location.`
+    );
+    return fallbackPath;
+  }
+
+  /**
+   * Determines whether the current user can create/modify the given directory.
+   *
+   * The nearest already-existing ancestor is probed with an actual file write
+   * because it is the only reliable way to detect permission problems across
+   * all platforms (notably Windows ACLs, which `fs.accessSync` does not honor).
+   */
+  public static isDirectoryWritable(dirPath: string): boolean {
+    let current = path.resolve(dirPath);
+
+    // Walk up to the nearest existing ancestor; the install script may need to
+    // create the leaf directory itself.
+    while (!fs.existsSync(current)) {
+      const parent = path.dirname(current);
+      if (parent === current) {
+        // Reached the filesystem root without finding an existing directory.
+        return false;
+      }
+      current = parent;
+    }
+
+    const probe = path.join(
+      current,
+      `.setup-dotnet-write-test-${process.pid}-${Date.now()}`
+    );
+    try {
+      fs.writeFileSync(probe, '');
+      return true;
+    } catch {
+      return false;
+    } finally {
+      try {
+        fs.rmSync(probe, {force: true});
+      } catch {
+        // Best-effort cleanup; ignore failures.
+      }
+    }
+  }
 
   private static convertInstallPathToAbsolute(installDir: string): string {
     if (path.isAbsolute(installDir)) return path.normalize(installDir);
