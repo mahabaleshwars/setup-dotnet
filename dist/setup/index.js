@@ -45027,6 +45027,12 @@ class DotnetInstallDir {
      * across platforms.
      */
     static fallback = external_path_default().join(external_os_default().homedir(), '.dotnet');
+    /**
+     * Last-resort fallback used when neither the default OS location nor the
+     * home directory (`$HOME/.dotnet`) are writable. Prefers the runner's
+     * temporary directory (`RUNNER_TEMP`) and otherwise the OS temp directory.
+     */
+    static tempFallback = external_path_default().join(process.env['RUNNER_TEMP'] || external_os_default().tmpdir(), '.dotnet');
     static resolvedDirPath;
     static get dirPath() {
         if (DotnetInstallDir.resolvedDirPath === undefined) {
@@ -45041,11 +45047,13 @@ class DotnetInstallDir {
      *   2. The default OS location, when it is writable by the current user.
      *   3. A user-writable fallback (`$HOME/.dotnet`) when the default location
      *      cannot be written to.
+     *   4. A last-resort temp fallback (`$RUNNER_TEMP/.dotnet` or the OS temp
+     *      directory) when the home fallback is also not writable.
      *
      * The parameters are only used to make the resolution logic testable in
      * isolation; production code relies on the platform defaults.
      */
-    static resolveDirPath(defaultPath = DotnetInstallDir.default[PLATFORM], fallbackPath = DotnetInstallDir.fallback) {
+    static resolveDirPath(defaultPath = DotnetInstallDir.default[PLATFORM], fallbackPath = DotnetInstallDir.fallback, tempFallbackPath = DotnetInstallDir.tempFallback) {
         // 1. An explicit override always wins and is never second-guessed.
         if (process.env['DOTNET_INSTALL_DIR']) {
             return DotnetInstallDir.convertInstallPathToAbsolute(process.env['DOTNET_INSTALL_DIR']);
@@ -45060,8 +45068,22 @@ class DotnetInstallDir {
         if (external_path_default().normalize(defaultPath) === external_path_default().normalize(fallbackPath)) {
             return defaultPath;
         }
-        // Fall back to a user-writable directory. This is not a breaking change
-        // because it only triggers in scenarios that previously failed.
+        // 4. Fall back to the user's home directory when it is writable. This is
+        // not a breaking change because it only triggers in scenarios that
+        // previously failed.
+        if (DotnetInstallDir.isDirectoryWritable(fallbackPath)) {
+            info(`The default .NET install directory '${defaultPath}' is not writable by the current user. Falling back to '${fallbackPath}'. Set the 'DOTNET_INSTALL_DIR' environment variable to override this location.`);
+            return fallbackPath;
+        }
+        // 5. Last resort: use a temporary directory when it is distinct from the
+        // home fallback and writable.
+        if (external_path_default().normalize(tempFallbackPath) !== external_path_default().normalize(fallbackPath) &&
+            DotnetInstallDir.isDirectoryWritable(tempFallbackPath)) {
+            info(`Neither the default .NET install directory '${defaultPath}' nor '${fallbackPath}' are writable by the current user. Falling back to '${tempFallbackPath}'. Set the 'DOTNET_INSTALL_DIR' environment variable to override this location.`);
+            return tempFallbackPath;
+        }
+        // 6. Nothing is writable. Return the home fallback as a best effort and
+        // surface a message so the failure is diagnosable.
         info(`The default .NET install directory '${defaultPath}' is not writable by the current user. Falling back to '${fallbackPath}'. Set the 'DOTNET_INSTALL_DIR' environment variable to override this location.`);
         return fallbackPath;
     }

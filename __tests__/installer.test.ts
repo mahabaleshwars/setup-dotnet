@@ -684,12 +684,45 @@ describe('installer tests', () => {
         expect(infoSpy).not.toHaveBeenCalled();
       });
 
-      it('falls back to the user-writable location when the default is not writable', () => {
-        writableSpy.mockReturnValue(false);
+      it('falls back to the home directory when the default is not writable but home is', () => {
+        writableSpy.mockImplementation(
+          (dir: string) => path.normalize(dir) === path.normalize(fallbackPath)
+        );
 
         const result = installer.DotnetInstallDir.resolveDirPath(
           defaultPath,
           fallbackPath
+        );
+
+        expect(result).toBe(fallbackPath);
+        expect(infoSpy).toHaveBeenCalledTimes(1);
+      });
+
+      it('falls back to the temp directory when neither the default nor home are writable', () => {
+        const tempFallbackPath = path.join(os.tmpdir(), '.dotnet');
+        writableSpy.mockImplementation(
+          (dir: string) =>
+            path.normalize(dir) === path.normalize(tempFallbackPath)
+        );
+
+        const result = installer.DotnetInstallDir.resolveDirPath(
+          defaultPath,
+          fallbackPath,
+          tempFallbackPath
+        );
+
+        expect(result).toBe(tempFallbackPath);
+        expect(infoSpy).toHaveBeenCalledTimes(1);
+      });
+
+      it('returns the home fallback as a best effort when nothing is writable', () => {
+        const tempFallbackPath = path.join(os.tmpdir(), '.dotnet');
+        writableSpy.mockReturnValue(false);
+
+        const result = installer.DotnetInstallDir.resolveDirPath(
+          defaultPath,
+          fallbackPath,
+          tempFallbackPath
         );
 
         expect(result).toBe(fallbackPath);
