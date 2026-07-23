@@ -388,7 +388,12 @@ export class DotnetCoreInstaller {
     private architecture?: string,
     private dotnetChannel?: string,
     private checkLatest: boolean = true
-  ) {}
+  ) {
+    // Align with DotnetVersionResolver, which trims the input. Without this,
+    // leading/trailing whitespace could prevent a local-SDK match when
+    // 'check-latest' is false, even though the online resolver would accept it.
+    this.version = version.trim();
+  }
 
   /**
    * Enumerates the SDK versions already installed under the install directory.
@@ -436,7 +441,7 @@ export class DotnetCoreInstaller {
       return null;
     }
 
-    const input = this.version.trim().toLowerCase();
+    const input = this.version.toLowerCase();
 
     // 'latest' (with LTS/STS/empty channel) -> highest installed overall.
     if (input === 'latest') {
