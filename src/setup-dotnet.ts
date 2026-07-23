@@ -56,6 +56,7 @@ export async function run() {
     const versions = core.getMultilineInput('dotnet-version');
     const installedDotnetVersions: (string | null)[] = [];
     const architecture = getArchitectureInput();
+    const checkLatest = core.getBooleanInput('check-latest');
     let dotnetChannel = core.getInput('dotnet-channel');
 
     const isLatestRequested = versions.some(
@@ -121,7 +122,8 @@ export async function run() {
           version,
           quality,
           architecture,
-          version.toLowerCase() === 'latest' ? dotnetChannel : undefined
+          version.toLowerCase() === 'latest' ? dotnetChannel : undefined,
+          checkLatest
         );
         const installedVersion = await dotnetInstaller.installDotnet();
         installedDotnetVersions.push(installedVersion);

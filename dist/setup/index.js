@@ -45054,16 +45054,117 @@ class DotnetCoreInstaller {
     quality;
     architecture;
     dotnetChannel;
+    checkLatest;
     static {
         DotnetInstallDir.setEnvironmentVariable();
     }
-    constructor(version, quality, architecture, dotnetChannel) {
+    constructor(version, quality, architecture, dotnetChannel, checkLatest = true) {
         this.version = version;
         this.quality = quality;
         this.architecture = architecture;
         this.dotnetChannel = dotnetChannel;
+        this.checkLatest = checkLatest;
+    }
+    /**
+     * Enumerates the SDK versions already installed under the install directory.
+     * Returns only entries that are valid semver versions.
+     */
+    getInstalledSdkVersions() {
+        const sdkDir = external_path_default().join(DotnetInstallDir.dirPath, 'sdk');
+        try {
+            return (0,external_fs_namespaceObject.readdirSync)(sdkDir, { withFileTypes: true })
+                .filter(entry => entry.isDirectory())
+                .map(entry => entry.name)
+                .filter(name => semver_default().valid(name) !== null);
+        }
+        catch {
+            // Directory doesn't exist or can't be read - treat as no local SDKs.
+            return [];
+        }
+    }
+    /**
+     * When 'check-latest' is false, look for a locally installed SDK that
+     * satisfies the requested version and return it. Returns null when nothing
+     * local satisfies the request (in which case the online path is used).
+     */
+    findLocalSdkVersion() {
+        const installed = this.getInstalledSdkVersions();
+        if (!installed.length) {
+            return null;
+        }
+        // A pinned version must always match exactly, including prereleases.
+        if (semver_default().valid(this.version)) {
+            return installed.find(v => v === this.version) ?? null;
+        }
+        // For floating/channel/latest requests, honor the quality input:
+        // include prereleases only when quality allows them.
+        const allowPrerelease = ['preview', 'daily'].includes((this.quality || '').toLowerCase());
+        const candidates = installed
+            .filter(v => allowPrerelease || semver_default().prerelease(v) === null)
+            .sort((semver_default()).rcompare); // highest version first
+        if (!candidates.length) {
+            return null;
+        }
+        const input = this.version.trim().toLowerCase();
+        // 'latest' (with LTS/STS/empty channel) -> highest installed overall.
+        if (input === 'latest') {
+            return candidates[0];
+        }
+        // Feature band A.B.Cxx (e.g. 8.0.1xx).
+        const bandMatch = this.version.match(/^(\d+)\.(\d+)\.(\d)xx$/);
+        if (bandMatch) {
+            const [, major, minor, band] = bandMatch;
+            const match = candidates.find(v => {
+                const parsed = semver_default().parse(v);
+                if (!parsed)
+                    return false;
+                const featureBand = Math.floor(parsed.patch / 100);
+                return (parsed.major === Number(major) &&
+                    parsed.minor === Number(minor) &&
+                    featureBand === Number(band));
+            });
+            return match ?? null;
+        }
+        // A.B or A.B.x / A.B.* (e.g. 8.0, 8.0.x).
+        const minorMatch = this.version.match(/^(\d+)\.(\d+)(?:\.[x*])?$/);
+        if (minorMatch) {
+            const [, major, minor] = minorMatch;
+            const match = candidates.find(v => {
+                const parsed = semver_default().parse(v);
+                return (parsed &&
+                    parsed.major === Number(major) &&
+                    parsed.minor === Number(minor));
+            });
+            return match ?? null;
+        }
+        // A or A.x / A.* (e.g. 8, 8.x).
+        const majorMatch = this.version.match(/^(\d+)(?:\.[x*])?$/);
+        if (majorMatch) {
+            const [, major] = majorMatch;
+            const match = candidates.find(v => {
+                const parsed = semver_default().parse(v);
+                return parsed && parsed.major === Number(major);
+            });
+            return match ?? null;
+        }
+        // x, * or any other wildcard -> highest installed overall.
+        return candidates[0];
     }
     async installDotnet() {
+        const isCrossArch = !!this.architecture &&
+            normalizeArch(this.architecture) !== normalizeArch(external_os_default().arch());
+        // When check-latest is false, try to reuse a locally installed SDK and
+        // skip all network calls. Cross-architecture requests are excluded because
+        // a host-arch SDK would be the wrong architecture; those always install
+        // online (and fail naturally when offline).
+        if (!this.checkLatest && !isCrossArch) {
+            const localVersion = this.findLocalSdkVersion();
+            if (localVersion) {
+                info(`'check-latest' is false and a locally installed .NET SDK (${localVersion}) satisfies the '${this.version}' request. Skipping download.`);
+                return localVersion;
+            }
+            info(`'check-latest' is false but no locally installed .NET SDK satisfies the '${this.version}' request. Falling back to online installation.`);
+        }
         const versionResolver = new DotnetVersionResolver(this.version, this.quality, this.dotnetChannel);
         const dotnetVersion = await versionResolver.createDotnetVersion();
         const architectureArguments = this.architecture &&
@@ -105724,6 +105825,7 @@ async function run() {
         const versions = getMultilineInput('dotnet-version');
         const installedDotnetVersions = [];
         const architecture = getArchitectureInput();
+        const checkLatest = getBooleanInput('check-latest');
         let dotnetChannel = getInput('dotnet-channel');
         const isLatestRequested = versions.some(version => version && version.toLowerCase() === 'latest');
         if (dotnetChannel && !isValidChannel(dotnetChannel)) {
@@ -105766,7 +105868,7 @@ async function run() {
             let dotnetInstaller;
             const uniqueVersions = new Set(versions.map(v => (v.toLowerCase() === 'latest' ? 'latest' : v)));
             for (const version of uniqueVersions) {
-                dotnetInstaller = new DotnetCoreInstaller(version, quality, architecture, version.toLowerCase() === 'latest' ? dotnetChannel : undefined);
+                dotnetInstaller = new DotnetCoreInstaller(version, quality, architecture, version.toLowerCase() === 'latest' ? dotnetChannel : undefined, checkLatest);
                 const installedVersion = await dotnetInstaller.installDotnet();
                 installedDotnetVersions.push(installedVersion);
             }

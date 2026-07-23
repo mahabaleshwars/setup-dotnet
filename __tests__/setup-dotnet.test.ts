@@ -289,6 +289,20 @@ describe('setup-dotnet tests', () => {
       expect(DotnetInstallDir.addToPath).toHaveBeenCalledTimes(1);
     });
 
+    it("should read the 'check-latest' input and pass it to DotnetCoreInstaller", async () => {
+      inputs['dotnet-version'] = ['10.0.101'];
+      inputs['dotnet-quality'] = '';
+      inputs['architecture'] = '';
+      inputs['check-latest'] = false;
+
+      installDotnetSpy.mockImplementation(() => Promise.resolve(''));
+
+      await setup.run();
+
+      expect(getBooleanInputSpy).toHaveBeenCalledWith('check-latest');
+      expect(installDotnetSpy).toHaveBeenCalledTimes(1);
+    });
+
     it('should fail the action if unsupported architecture is provided', async () => {
       inputs['dotnet-version'] = ['10.0.101'];
       inputs['dotnet-quality'] = '';

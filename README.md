@@ -309,6 +309,25 @@ steps:
 
 > **Note**: Ensure workloads are compatible with your runner's OS, architecture, and .NET SDK version before enabling workload installation. Some workloads may require additional installation time due to large toolchain downloads.
 
+## Using the `check-latest` input
+
+By default (`check-latest: true`) the action resolves and installs the latest available version that satisfies the requested version spec online. This matches the historical behavior, so existing workflows are unaffected.
+
+When `check-latest: false`, the action first looks for an SDK that is already installed under the install directory (`DOTNET_INSTALL_DIR`/`DOTNET_ROOT`). If a locally installed SDK satisfies the request, it is reused and **all network calls are skipped** (including the runtime pre-install). This is useful for air-gapped or preloaded runners. If no local SDK satisfies the request, the action falls back to the normal online installation.
+
+```yaml
+steps:
+- uses: actions/checkout@v5
+- name: Reuse a preinstalled SDK when available (offline-friendly)
+  uses: actions/setup-dotnet@v6
+  with:
+    dotnet-version: '8.0.x'
+    check-latest: false
+- run: dotnet build <my project>
+```
+
+> **Note**: `check-latest: false` does not apply to cross-architecture requests. When the requested `architecture` differs from the runner's native architecture, the action always installs online (and fails when offline), to avoid reusing an SDK built for the wrong architecture.
+
 # Outputs and environment variables
 
 ## Outputs
