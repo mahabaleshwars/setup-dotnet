@@ -295,12 +295,17 @@ describe('setup-dotnet tests', () => {
       inputs['architecture'] = '';
       inputs['check-latest'] = false;
 
-      installDotnetSpy.mockImplementation(() => Promise.resolve(''));
+      let capturedCheckLatest: boolean | undefined;
+      installDotnetSpy.mockImplementation(function (this: any) {
+        capturedCheckLatest = this.checkLatest;
+        return Promise.resolve('');
+      });
 
       await setup.run();
 
       expect(getBooleanInputSpy).toHaveBeenCalledWith('check-latest');
       expect(installDotnetSpy).toHaveBeenCalledTimes(1);
+      expect(capturedCheckLatest).toBe(false);
     });
 
     it('should fail the action if unsupported architecture is provided', async () => {
