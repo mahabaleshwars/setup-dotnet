@@ -610,7 +610,7 @@ describe('installer tests', () => {
         expect(getExecOutputSpy).not.toHaveBeenCalled();
       });
 
-      it('picks the highest installed SDK for a \'latest\' request', async () => {
+      it("picks the highest installed SDK for a 'latest' request", async () => {
         readdirSyncSpy.mockReturnValue(makeDirents(['8.0.412', '9.0.101']));
 
         const dotnetInstaller = new installer.DotnetCoreInstaller(
