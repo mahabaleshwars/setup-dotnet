@@ -610,7 +610,7 @@ describe('installer tests', () => {
         expect(getExecOutputSpy).not.toHaveBeenCalled();
       });
 
-      it("picks the highest installed SDK for a 'latest' request", async () => {
+      it('picks the highest installed SDK for a \'latest\' request', async () => {
         readdirSyncSpy.mockReturnValue(makeDirents(['8.0.412', '9.0.101']));
 
         const dotnetInstaller = new installer.DotnetCoreInstaller(
@@ -673,6 +673,59 @@ describe('installer tests', () => {
         );
         await dotnetInstaller.installDotnet();
 
+        expect(getExecOutputSpy).toHaveBeenCalledTimes(2);
+      });
+
+      it('reuses the highest installed SDK for a major-only request', async () => {
+        readdirSyncSpy.mockReturnValue(
+          makeDirents(['8.0.100', '8.0.412', '8.0.205'])
+        );
+
+        const dotnetInstaller = new installer.DotnetCoreInstaller(
+          '8',
+          '',
+          undefined,
+          undefined,
+          false
+        );
+        const installedVersion = await dotnetInstaller.installDotnet();
+
+        expect(installedVersion).toBe('8.0.412');
+        expect(getExecOutputSpy).not.toHaveBeenCalled();
+      });
+
+      it('reuses a prerelease SDK when quality is preview', async () => {
+        readdirSyncSpy.mockReturnValue(
+          makeDirents(['8.0.100-preview.1', '8.0.100-preview.2'])
+        );
+
+        const dotnetInstaller = new installer.DotnetCoreInstaller(
+          '8.0.x',
+          'preview',
+          undefined,
+          undefined,
+          false
+        );
+        const installedVersion = await dotnetInstaller.installDotnet();
+
+        expect(installedVersion).toBe('8.0.100-preview.2');
+        expect(getExecOutputSpy).not.toHaveBeenCalled();
+      });
+
+      it('falls back to online install when no local SDK matches a floating request', async () => {
+        readdirSyncSpy.mockReturnValue(makeDirents(['8.0.412']));
+        maxSatisfyingSpy.mockImplementation(() => '9.0.101');
+
+        const dotnetInstaller = new installer.DotnetCoreInstaller(
+          '9.0.x',
+          '',
+          undefined,
+          undefined,
+          false
+        );
+        await dotnetInstaller.installDotnet();
+
+        // No local match => runtime pre-install + SDK install (two executions).
         expect(getExecOutputSpy).toHaveBeenCalledTimes(2);
       });
     });

@@ -289,7 +289,7 @@ describe('setup-dotnet tests', () => {
       expect(DotnetInstallDir.addToPath).toHaveBeenCalledTimes(1);
     });
 
-    it("should read the 'check-latest' input and pass it to DotnetCoreInstaller", async () => {
+    it('should read the \'check-latest\' input and pass it to DotnetCoreInstaller', async () => {
       inputs['dotnet-version'] = ['10.0.101'];
       inputs['dotnet-quality'] = '';
       inputs['architecture'] = '';
