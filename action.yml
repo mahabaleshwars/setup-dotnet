@@ -42,7 +42,7 @@ inputs:
   check-latest:
     description: 'When true (default), the action resolves and installs the latest available version that satisfies the requested version spec online, matching the existing behavior. When false, the action first checks for a locally installed SDK that satisfies the request and, if found, reuses it without any network calls. This does not apply to cross-architecture requests, which always install online.'
     required: false
-    default: 'true'
+    default: true
 outputs:
   cache-hit:
     description: 'A boolean value to indicate if a cache was hit.'

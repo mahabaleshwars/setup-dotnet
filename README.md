@@ -317,7 +317,7 @@ When `check-latest: false`, the action first looks for an SDK that is already in
 
 ```yaml
 steps:
-- uses: actions/checkout@v5
+- uses: actions/checkout@v7
 - name: Reuse a preinstalled SDK when available (offline-friendly)
   uses: actions/setup-dotnet@v6
   with:
