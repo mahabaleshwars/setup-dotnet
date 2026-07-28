@@ -45181,25 +45181,29 @@ class DotnetCoreInstaller {
             return null;
         }
         // Feature band A.B.Cxx (e.g. 8.0.1xx).
+        // Feature band A.B.Cxx (e.g. 8.0.1xx). Only lowercase is accepted here,
+        // because the online resolver rejects 'A.B.CXX' as an invalid format.
         const bandMatch = this.version.match(/^(\d+)\.(\d+)\.(\d)xx$/);
         if (bandMatch) {
             return this.findByFeatureBand(candidates, bandMatch[1], bandMatch[2], bandMatch[3]);
         }
-        // A.B or A.B.x / A.B.* (e.g. 8.0, 8.0.x).
-        const minorMatch = this.version.match(/^(\d+)\.(\d+)(?:\.[x*])?$/);
+        // A.B or A.B.x / A.B.X / A.B.* (e.g. 8.0, 8.0.x). semver treats 'x', 'X'
+        // and '*' as equivalent wildcards, so all of them have to be accepted.
+        const minorMatch = this.version.match(/^(\d+)\.(\d+)(?:\.[xX*])?$/);
         if (minorMatch) {
             return this.findByMajorMinor(candidates, minorMatch[1], minorMatch[2]);
         }
-        // A or A.x / A.* (e.g. 8, 8.x). The online path turns a bare major into a
-        // concrete channel, so the same mapping has to be applied here.
-        const majorMatch = this.version.match(/^(\d+)(?:\.[x*])?$/);
+        // A or A.x / A.X / A.* (e.g. 8, 8.x). The online path turns a bare major
+        // into a concrete channel, so the same mapping has to be applied here.
+        const majorMatch = this.version.match(/^(\d+)(?:\.[xX*])?$/);
         if (majorMatch) {
             const [major, minor] = channelForMajor(majorMatch[1]).split('.');
             return this.findByMajorMinor(candidates, major, minor);
         }
-        // Bare wildcards ('x', '*') resolve to the LTS channel online and anything
-        // else is rejected by the resolver. Neither can be decided locally, so the
-        // online path stays responsible for resolving and validating the input.
+        // Bare wildcards ('x', 'X', '*') resolve to the LTS channel online and
+        // anything else is rejected by the resolver. Neither can be decided
+        // locally, so the online path stays responsible for resolving and
+        // validating the input.
         return null;
     }
     async installDotnet() {

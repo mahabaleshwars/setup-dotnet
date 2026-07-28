@@ -894,6 +894,62 @@ describe('installer tests', () => {
         expect(installedVersion).toBe('3.1.426');
         expect(getExecOutputSpy).not.toHaveBeenCalled();
       });
+
+      each(['8.0.X', '8.0.x', '8.0.*', '8.0']).it(
+        'reuses a local SDK for the floating request %s',
+        async (version: string) => {
+          readdirSyncSpy.mockReturnValue(makeDirents(['8.0.100', '8.0.412']));
+
+          const dotnetInstaller = new installer.DotnetCoreInstaller(
+            version,
+            '',
+            undefined,
+            undefined,
+            false
+          );
+          const installedVersion = await dotnetInstaller.installDotnet();
+
+          expect(installedVersion).toBe('8.0.412');
+          expect(getExecOutputSpy).not.toHaveBeenCalled();
+        }
+      );
+
+      each(['8.X', '8.x', '8.*', '8']).it(
+        'reuses a local SDK for the major-only request %s',
+        async (version: string) => {
+          readdirSyncSpy.mockReturnValue(makeDirents(['8.0.100', '8.0.412']));
+
+          const dotnetInstaller = new installer.DotnetCoreInstaller(
+            version,
+            '',
+            undefined,
+            undefined,
+            false
+          );
+          const installedVersion = await dotnetInstaller.installDotnet();
+
+          expect(installedVersion).toBe('8.0.412');
+          expect(getExecOutputSpy).not.toHaveBeenCalled();
+        }
+      );
+
+      it('does not reuse a local SDK for an uppercase feature band request', async () => {
+        readdirSyncSpy.mockReturnValue(makeDirents(['8.0.105']));
+
+        const dotnetInstaller = new installer.DotnetCoreInstaller(
+          '8.0.1XX',
+          '',
+          undefined,
+          undefined,
+          false
+        );
+
+        // The online resolver rejects 'A.B.CXX', so reusing it locally would
+        // turn an invalid input into a silent success.
+        await expect(dotnetInstaller.installDotnet()).rejects.toThrow(
+          `The 'dotnet-version' was supplied in invalid format: 8.0.1XX!`
+        );
+      });
     });
 
     describe('addToPath() tests', () => {
