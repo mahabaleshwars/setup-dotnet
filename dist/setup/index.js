@@ -45180,7 +45180,6 @@ class DotnetCoreInstaller {
             // LTS and STS cannot be mapped to a version without the releases index.
             return null;
         }
-        // Feature band A.B.Cxx (e.g. 8.0.1xx).
         // Feature band A.B.Cxx (e.g. 8.0.1xx). Only lowercase is accepted here,
         // because the online resolver rejects 'A.B.CXX' as an invalid format.
         const bandMatch = this.version.match(/^(\d+)\.(\d+)\.(\d)xx$/);

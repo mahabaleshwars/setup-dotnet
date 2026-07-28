@@ -330,13 +330,13 @@ steps:
 
 A locally installed SDK is reused only when it satisfies all of the following, otherwise the action installs online:
 
-- it matches the requested version spec (`A.B.C`, `A.B`, `A.B.x`, `A.B.Cxx`, `A`, `A.x` or `latest`);
+- it matches the requested version spec (`A.B.C`, `A.B`, `A.B.x`, `A.B.Cxx`, `A`, `A.x` or `latest`). In the wildcard position, `x`, `X` and `*` are equivalent, so `A.B.X`, `A.B.*`, `A.X` and `A.*` are accepted as well;
 - it is not older than the `sdk.version` declared in `global.json`, because `rollForward` only ever rolls forward;
 - it matches the requested `dotnet-quality` (`preview` and `daily` require a prerelease SDK, any other value requires a GA one);
 - it is built for the runner's architecture;
 - the `dotnet` executable is present next to the SDK folders.
 
-Requests that cannot be resolved without the .NET release metadata are always installed online, even with `check-latest: false`. This covers `dotnet-version: latest` combined with `dotnet-channel: LTS` or `STS`, and the `x` / `*` wildcards.
+Requests that cannot be resolved without the .NET release metadata are always installed online, even with `check-latest: false`. This covers `dotnet-version: latest` combined with `dotnet-channel: LTS` or `STS`, and a bare wildcard (`dotnet-version: x`, `X` or `*`), which resolves to the LTS channel. Wildcards that are qualified with a major or minor version, such as `8.x` or `8.0.x`, are still eligible for local reuse.
 
 # Outputs and environment variables
 
