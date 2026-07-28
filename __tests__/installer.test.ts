@@ -36,11 +36,13 @@ jest.unstable_mockModule('fs', () => {
   const actual = jest.requireActual('fs') as typeof import('fs');
   const chmodSync = jest.fn();
   const readdirSync = jest.fn();
+  const existsSync = jest.fn(() => true);
   return {
     ...actual,
     chmodSync,
     readdirSync,
-    default: {...actual, chmodSync, readdirSync}
+    existsSync,
+    default: {...actual, chmodSync, readdirSync, existsSync}
   };
 });
 
@@ -519,11 +521,20 @@ describe('installer tests', () => {
 
     describe('check-latest: false (local SDK reuse) tests', () => {
       const readdirSyncSpy = fs.readdirSync as unknown as jest.Mock;
+      const existsSyncSpy = fs.existsSync as unknown as jest.Mock;
 
       const makeDirents = (names: string[]): any =>
         names.map(name => ({
           name,
-          isDirectory: () => true
+          isDirectory: () => true,
+          isSymbolicLink: () => false
+        }));
+
+      const makeSymlinks = (names: string[]): any =>
+        names.map(name => ({
+          name,
+          isDirectory: () => false,
+          isSymbolicLink: () => true
         }));
 
       beforeEach(() => {
@@ -535,10 +546,13 @@ describe('installer tests', () => {
             stderr: ''
           })
         );
+        // The dotnet muxer is expected to sit next to the SDK folders.
+        existsSyncSpy.mockReturnValue(true);
       });
 
       afterEach(() => {
         readdirSyncSpy.mockReset();
+        existsSyncSpy.mockReset();
       });
 
       it('reuses a locally installed pinned SDK and skips all install scripts', async () => {
@@ -610,14 +624,14 @@ describe('installer tests', () => {
         expect(getExecOutputSpy).not.toHaveBeenCalled();
       });
 
-      it("picks the highest installed SDK for a 'latest' request", async () => {
+      it('picks the highest installed SDK for a channel-less latest request', async () => {
         readdirSyncSpy.mockReturnValue(makeDirents(['8.0.412', '9.0.101']));
 
         const dotnetInstaller = new installer.DotnetCoreInstaller(
           'latest',
           '',
           undefined,
-          'LTS',
+          undefined,
           false
         );
         const installedVersion = await dotnetInstaller.installDotnet();
@@ -727,6 +741,158 @@ describe('installer tests', () => {
 
         // No local match => runtime pre-install + SDK install (two executions).
         expect(getExecOutputSpy).toHaveBeenCalledTimes(2);
+      });
+
+      it('installs online for a latest request with an LTS channel', async () => {
+        readdirSyncSpy.mockReturnValue(makeDirents(['8.0.412', '9.0.101']));
+        maxSatisfyingSpy.mockImplementation(() => '8.0.412');
+
+        const dotnetInstaller = new installer.DotnetCoreInstaller(
+          'latest',
+          '',
+          undefined,
+          'LTS',
+          false
+        );
+        await dotnetInstaller.installDotnet();
+
+        // LTS cannot be mapped to a version offline => online resolution.
+        expect(getExecOutputSpy).toHaveBeenCalledTimes(2);
+      });
+
+      it('reuses the SDK of the requested channel for a latest request', async () => {
+        readdirSyncSpy.mockReturnValue(makeDirents(['8.0.412', '9.0.101']));
+
+        const dotnetInstaller = new installer.DotnetCoreInstaller(
+          'latest',
+          '',
+          undefined,
+          '8.0',
+          false
+        );
+        const installedVersion = await dotnetInstaller.installDotnet();
+
+        expect(installedVersion).toBe('8.0.412');
+        expect(getExecOutputSpy).not.toHaveBeenCalled();
+      });
+
+      it('installs online for a wildcard request instead of guessing', async () => {
+        readdirSyncSpy.mockReturnValue(makeDirents(['8.0.412', '9.0.101']));
+        maxSatisfyingSpy.mockImplementation(() => '8.0.412');
+
+        const dotnetInstaller = new installer.DotnetCoreInstaller(
+          'x',
+          '',
+          undefined,
+          undefined,
+          false
+        );
+        await dotnetInstaller.installDotnet();
+
+        // 'x' resolves to the LTS channel online, which is not known locally.
+        expect(getExecOutputSpy).toHaveBeenCalledTimes(2);
+      });
+
+      it('does not reuse a local SDK below the global.json minimum version', async () => {
+        readdirSyncSpy.mockReturnValue(makeDirents(['8.0.100', '8.0.205']));
+        maxSatisfyingSpy.mockImplementation(() => '8.0.412');
+
+        const dotnetInstaller = new installer.DotnetCoreInstaller(
+          '8.0',
+          '',
+          undefined,
+          undefined,
+          false,
+          '8.0.400'
+        );
+        await dotnetInstaller.installDotnet();
+
+        // Rolling back below the global.json version would break dotnet build.
+        expect(getExecOutputSpy).toHaveBeenCalledTimes(2);
+      });
+
+      it('reuses a local SDK at or above the global.json minimum version', async () => {
+        readdirSyncSpy.mockReturnValue(makeDirents(['8.0.100', '8.0.412']));
+
+        const dotnetInstaller = new installer.DotnetCoreInstaller(
+          '8.0',
+          '',
+          undefined,
+          undefined,
+          false,
+          '8.0.400'
+        );
+        const installedVersion = await dotnetInstaller.installDotnet();
+
+        expect(installedVersion).toBe('8.0.412');
+        expect(getExecOutputSpy).not.toHaveBeenCalled();
+      });
+
+      it('installs online when the dotnet muxer is missing', async () => {
+        readdirSyncSpy.mockReturnValue(makeDirents(['8.0.412']));
+        existsSyncSpy.mockReturnValue(false);
+        maxSatisfyingSpy.mockImplementation(() => '8.0.412');
+
+        const dotnetInstaller = new installer.DotnetCoreInstaller(
+          '8.0.x',
+          '',
+          undefined,
+          undefined,
+          false
+        );
+        await dotnetInstaller.installDotnet();
+
+        // An orphaned sdk folder without the CLI must not count as installed.
+        expect(getExecOutputSpy).toHaveBeenCalledTimes(2);
+      });
+
+      it('reuses an SDK exposed as a symbolic link', async () => {
+        readdirSyncSpy.mockReturnValue(makeSymlinks(['8.0.412']));
+
+        const dotnetInstaller = new installer.DotnetCoreInstaller(
+          '8.0.x',
+          '',
+          undefined,
+          undefined,
+          false
+        );
+        const installedVersion = await dotnetInstaller.installDotnet();
+
+        expect(installedVersion).toBe('8.0.412');
+        expect(getExecOutputSpy).not.toHaveBeenCalled();
+      });
+
+      it('installs online when quality is preview but only GA SDKs are local', async () => {
+        readdirSyncSpy.mockReturnValue(makeDirents(['8.0.412']));
+        maxSatisfyingSpy.mockImplementation(() => '8.0.412');
+
+        const dotnetInstaller = new installer.DotnetCoreInstaller(
+          '8.0.x',
+          'preview',
+          undefined,
+          undefined,
+          false
+        );
+        await dotnetInstaller.installDotnet();
+
+        expect(getExecOutputSpy).toHaveBeenCalledTimes(2);
+      });
+
+      it('matches the online channel mapping for legacy major-only requests', async () => {
+        readdirSyncSpy.mockReturnValue(makeDirents(['3.0.103', '3.1.426']));
+
+        const dotnetInstaller = new installer.DotnetCoreInstaller(
+          '3',
+          '',
+          undefined,
+          undefined,
+          false
+        );
+        const installedVersion = await dotnetInstaller.installDotnet();
+
+        // Online a bare '3' maps to the 3.1 channel, so 3.0.103 must be ignored.
+        expect(installedVersion).toBe('3.1.426');
+        expect(getExecOutputSpy).not.toHaveBeenCalled();
       });
     });
 

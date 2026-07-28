@@ -328,6 +328,16 @@ steps:
 
 > **Note**: `check-latest: false` does not apply to cross-architecture requests. When the requested `architecture` differs from the runner's native architecture, the action always installs online (and fails when offline), to avoid reusing an SDK built for the wrong architecture.
 
+A locally installed SDK is reused only when it satisfies all of the following, otherwise the action installs online:
+
+- it matches the requested version spec (`A.B.C`, `A.B`, `A.B.x`, `A.B.Cxx`, `A`, `A.x` or `latest`);
+- it is not older than the `sdk.version` declared in `global.json`, because `rollForward` only ever rolls forward;
+- it matches the requested `dotnet-quality` (`preview` and `daily` require a prerelease SDK, any other value requires a GA one);
+- it is built for the runner's architecture;
+- the `dotnet` executable is present next to the SDK folders.
+
+Requests that cannot be resolved without the .NET release metadata are always installed online, even with `check-latest: false`. This covers `dotnet-version: latest` combined with `dotnet-channel: LTS` or `STS`, and the `x` / `*` wildcards.
+
 # Outputs and environment variables
 
 ## Outputs

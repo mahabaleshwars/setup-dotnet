@@ -44781,6 +44781,23 @@ const PLATFORM = (() => {
 
 const QUALITY_INPUT_MINIMAL_MAJOR_TAG = 6;
 const LATEST_PATCH_SYNTAX_MINIMAL_MAJOR_TAG = 5;
+/**
+ * Maps a bare major version tag to the channel used by the install scripts.
+ * Starting with .NET 5, the minor version is always zero. The earlier versions
+ * are hardcoded because they will not get new releases.
+ */
+function channelForMajor(major) {
+    switch (major) {
+        case '1':
+            return '1.1';
+        case '2':
+            return '2.2';
+        case '3':
+            return '3.1';
+        default:
+            return `${major}.0`;
+    }
+}
 class DotnetVersionResolver {
     quality;
     dotnetChannel;
@@ -44860,22 +44877,7 @@ class DotnetVersionResolver {
             this.resolvedArgument.value = `${major}.${minor}`;
         }
         else if (this.isNumericTag(major)) {
-            // Starting with .NET 5, the minor version is always zero.
-            // Hardcode the earlier versions because they will not get new releases.
-            switch (major) {
-                case '1':
-                    this.resolvedArgument.value = '1.1';
-                    break;
-                case '2':
-                    this.resolvedArgument.value = '2.2';
-                    break;
-                case '3':
-                    this.resolvedArgument.value = '3.1';
-                    break;
-                default:
-                    this.resolvedArgument.value = `${major}.0`;
-                    break;
-            }
+            this.resolvedArgument.value = channelForMajor(major);
         }
         else {
             // If "dotnet-version" is specified as *, x or X resolve latest version of .NET explicitly from LTS channel. The version argument will default to "latest" by install-dotnet script.
@@ -45055,15 +45057,17 @@ class DotnetCoreInstaller {
     architecture;
     dotnetChannel;
     checkLatest;
+    minimumVersion;
     static {
         DotnetInstallDir.setEnvironmentVariable();
     }
-    constructor(version, quality, architecture, dotnetChannel, checkLatest = true) {
+    constructor(version, quality, architecture, dotnetChannel, checkLatest = true, minimumVersion) {
         this.version = version;
         this.quality = quality;
         this.architecture = architecture;
         this.dotnetChannel = dotnetChannel;
         this.checkLatest = checkLatest;
+        this.minimumVersion = minimumVersion;
         // Align with DotnetVersionResolver, which trims the input. Without this,
         // leading/trailing whitespace could prevent a local-SDK match when
         // 'check-latest' is false, even though the online resolver would accept it.
@@ -45076,15 +45080,45 @@ class DotnetCoreInstaller {
     getInstalledSdkVersions() {
         const sdkDir = external_path_default().join(DotnetInstallDir.dirPath, 'sdk');
         try {
-            return (0,external_fs_namespaceObject.readdirSync)(sdkDir, { withFileTypes: true })
-                .filter(entry => entry.isDirectory())
+            const versions = (0,external_fs_namespaceObject.readdirSync)(sdkDir, { withFileTypes: true })
+                // Custom and container images often symlink SDK folders instead of
+                // copying them, so symlinks have to be treated as directories.
+                .filter(entry => entry.isDirectory() || entry.isSymbolicLink())
                 .map(entry => entry.name)
                 .filter(name => semver_default().valid(name) !== null);
+            core_debug(`Locally installed .NET SDKs in '${sdkDir}': ${versions.join(', ') || '<none>'}`);
+            return versions;
         }
         catch {
             // Directory doesn't exist or can't be read - treat as no local SDKs.
+            core_debug(`Unable to read the SDK directory '${sdkDir}'.`);
             return [];
         }
+    }
+    /**
+     * The SDK folders are only usable when the 'dotnet' muxer sits next to them.
+     * A partially removed installation would otherwise be reported as a success
+     * while the CLI is not runnable at all.
+     */
+    hasDotnetMuxer() {
+        return (0,external_fs_namespaceObject.existsSync)(external_path_default().join(DotnetInstallDir.dirPath, utils_IS_WINDOWS ? 'dotnet.exe' : 'dotnet'));
+    }
+    findByMajorMinor(candidates, major, minor) {
+        return (candidates.find(version => {
+            const parsed = semver_default().parse(version);
+            return (parsed &&
+                parsed.major === Number(major) &&
+                parsed.minor === Number(minor));
+        }) ?? null);
+    }
+    findByFeatureBand(candidates, major, minor, band) {
+        return (candidates.find(version => {
+            const parsed = semver_default().parse(version);
+            return (parsed &&
+                parsed.major === Number(major) &&
+                parsed.minor === Number(minor) &&
+                Math.floor(parsed.patch / 100) === Number(band));
+        }) ?? null);
     }
     /**
      * When 'check-latest' is false, look for a locally installed SDK that
@@ -45096,63 +45130,77 @@ class DotnetCoreInstaller {
         if (!installed.length) {
             return null;
         }
+        if (!this.hasDotnetMuxer()) {
+            core_debug(`The 'dotnet' executable was not found in '${DotnetInstallDir.dirPath}'. Locally installed SDKs are ignored.`);
+            return null;
+        }
+        // A global.json 'rollForward' policy only ever rolls forward: the version
+        // it declares stays a lower bound. Reusing a lower SDK would make the
+        // action succeed while the next 'dotnet build' fails with
+        // "A compatible .NET SDK was not found".
+        const minimumVersion = this.minimumVersion;
+        const allowed = minimumVersion
+            ? installed.filter(version => semver_default().gte(version, minimumVersion))
+            : installed;
+        if (!allowed.length) {
+            core_debug(`No locally installed .NET SDK satisfies the global.json minimum version '${minimumVersion}'.`);
+            return null;
+        }
         // A pinned version must always match exactly, including prereleases.
         if (semver_default().valid(this.version)) {
-            return installed.find(v => v === this.version) ?? null;
+            return allowed.find(version => version === this.version) ?? null;
         }
-        // For floating/channel/latest requests, honor the quality input:
-        // include prereleases only when quality allows them.
-        const allowPrerelease = ['preview', 'daily'].includes((this.quality || '').toLowerCase());
-        const candidates = installed
-            .filter(v => allowPrerelease || semver_default().prerelease(v) === null)
+        // For floating/channel/latest requests, honor the quality input: 'preview'
+        // and 'daily' ask for prerelease builds, every other value requires GA.
+        const wantsPrerelease = ['preview', 'daily'].includes((this.quality || '').toLowerCase());
+        const candidates = allowed
+            .filter(version => wantsPrerelease
+            ? semver_default().prerelease(version) !== null
+            : semver_default().prerelease(version) === null)
             .sort((semver_default()).rcompare); // highest version first
         if (!candidates.length) {
             return null;
         }
         const input = this.version.toLowerCase();
-        // 'latest' (with LTS/STS/empty channel) -> highest installed overall.
+        // 'latest' has to honor 'dotnet-channel' exactly like the online path does.
         if (input === 'latest') {
-            return candidates[0];
+            const channel = (this.dotnetChannel || '').trim();
+            // Without a channel the highest installed SDK is the right answer.
+            if (!channel) {
+                return candidates[0];
+            }
+            const channelMinor = channel.match(/^(\d+)\.(\d+)$/);
+            if (channelMinor) {
+                return this.findByMajorMinor(candidates, channelMinor[1], channelMinor[2]);
+            }
+            const channelBand = channel.match(/^(\d+)\.(\d+)\.(\d)xx$/);
+            if (channelBand) {
+                return this.findByFeatureBand(candidates, channelBand[1], channelBand[2], channelBand[3]);
+            }
+            // LTS and STS cannot be mapped to a version without the releases index.
+            return null;
         }
         // Feature band A.B.Cxx (e.g. 8.0.1xx).
         const bandMatch = this.version.match(/^(\d+)\.(\d+)\.(\d)xx$/);
         if (bandMatch) {
-            const [, major, minor, band] = bandMatch;
-            const match = candidates.find(v => {
-                const parsed = semver_default().parse(v);
-                if (!parsed)
-                    return false;
-                const featureBand = Math.floor(parsed.patch / 100);
-                return (parsed.major === Number(major) &&
-                    parsed.minor === Number(minor) &&
-                    featureBand === Number(band));
-            });
-            return match ?? null;
+            return this.findByFeatureBand(candidates, bandMatch[1], bandMatch[2], bandMatch[3]);
         }
         // A.B or A.B.x / A.B.* (e.g. 8.0, 8.0.x).
         const minorMatch = this.version.match(/^(\d+)\.(\d+)(?:\.[x*])?$/);
         if (minorMatch) {
-            const [, major, minor] = minorMatch;
-            const match = candidates.find(v => {
-                const parsed = semver_default().parse(v);
-                return (parsed &&
-                    parsed.major === Number(major) &&
-                    parsed.minor === Number(minor));
-            });
-            return match ?? null;
+            return this.findByMajorMinor(candidates, minorMatch[1], minorMatch[2]);
         }
-        // A or A.x / A.* (e.g. 8, 8.x).
+        // A or A.x / A.* (e.g. 8, 8.x). The online path turns a bare major into a
+        // concrete channel, so the same mapping has to be applied here.
         const majorMatch = this.version.match(/^(\d+)(?:\.[x*])?$/);
         if (majorMatch) {
-            const [, major] = majorMatch;
-            const match = candidates.find(v => {
-                const parsed = semver_default().parse(v);
-                return parsed && parsed.major === Number(major);
-            });
-            return match ?? null;
+            const [major, minor] = channelForMajor(majorMatch[1]).split('.');
+            return this.findByMajorMinor(candidates, major, minor);
         }
-        // x, * or any other wildcard -> highest installed overall.
-        return candidates[0];
+        // Bare wildcards ('x', '*') resolve to the LTS channel online and anything
+        // else is rejected by the resolver. Neither can be decided locally, so the
+        // online path stays responsible for resolving and validating the input.
+        return null;
     }
     async installDotnet() {
         const isCrossArch = !!this.architecture &&
@@ -45171,8 +45219,7 @@ class DotnetCoreInstaller {
         }
         const versionResolver = new DotnetVersionResolver(this.version, this.quality, this.dotnetChannel);
         const dotnetVersion = await versionResolver.createDotnetVersion();
-        const architectureArguments = this.architecture &&
-            normalizeArch(this.architecture) !== normalizeArch(external_os_default().arch())
+        const architectureArguments = isCrossArch
             ? [
                 utils_IS_WINDOWS ? '-InstallDir' : '--install-dir',
                 utils_IS_WINDOWS
@@ -105827,6 +105874,17 @@ async function run() {
         // Proxy, auth, (etc) are still set up, even if no version is identified
         //
         const versions = getMultilineInput('dotnet-version');
+        // Version spec -> lowest SDK version accepted for it. Only global.json with
+        // a 'rollForward' policy sets a floor, because rolling forward widens the
+        // spec while the declared version stays the minimum.
+        const minimumVersions = new Map();
+        const addVersionFromGlobalJson = (globalJsonPath) => {
+            const { version, minimumVersion } = getVersionFromGlobalJson(globalJsonPath);
+            versions.push(version);
+            if (minimumVersion) {
+                minimumVersions.set(version, minimumVersion);
+            }
+        };
         const installedDotnetVersions = [];
         const architecture = getArchitectureInput();
         const checkLatest = getBooleanInput('check-latest');
@@ -105851,14 +105909,14 @@ async function run() {
             if (!external_fs_namespaceObject.existsSync(globalJsonPath)) {
                 throw new Error(`The specified global.json file '${globalJsonFileInput}' does not exist`);
             }
-            versions.push(getVersionFromGlobalJson(globalJsonPath));
+            addVersionFromGlobalJson(globalJsonPath);
         }
         if (!versions.length) {
             // Try to fall back to global.json
             core_debug('No version found, trying to find version from global.json');
             const globalJsonPath = external_path_default().join(process.cwd(), 'global.json');
             if (external_fs_namespaceObject.existsSync(globalJsonPath)) {
-                versions.push(getVersionFromGlobalJson(globalJsonPath));
+                addVersionFromGlobalJson(globalJsonPath);
             }
             else {
                 info(`The global.json wasn't found in the root directory. No .NET version will be installed.`);
@@ -105872,7 +105930,7 @@ async function run() {
             let dotnetInstaller;
             const uniqueVersions = new Set(versions.map(v => (v.toLowerCase() === 'latest' ? 'latest' : v)));
             for (const version of uniqueVersions) {
-                dotnetInstaller = new DotnetCoreInstaller(version, quality, architecture, version.toLowerCase() === 'latest' ? dotnetChannel : undefined, checkLatest);
+                dotnetInstaller = new DotnetCoreInstaller(version, quality, architecture, version.toLowerCase() === 'latest' ? dotnetChannel : undefined, checkLatest, minimumVersions.get(version));
                 const installedVersion = await dotnetInstaller.installDotnet();
                 installedDotnetVersions.push(installedVersion);
             }
@@ -105929,6 +105987,7 @@ function getArchitectureInput() {
 }
 function getVersionFromGlobalJson(globalJsonPath) {
     let version = '';
+    let minimumVersion;
     const globalJson = json5_lib_default().parse(
     // .trim() is necessary to strip BOM https://github.com/nodejs/node/issues/20649
     external_fs_namespaceObject.readFileSync(globalJsonPath, { encoding: 'utf8' }).trim(), 
@@ -105964,9 +106023,12 @@ function getVersionFromGlobalJson(globalJsonPath) {
                     version = `${major}.${minor}.${feature}xx`;
                     break;
             }
+            if (version !== globalJson.sdk.version) {
+                minimumVersion = globalJson.sdk.version;
+            }
         }
     }
-    return version;
+    return { version, minimumVersion };
 }
 function outputInstalledVersion(installedVersions, globalJsonFileInput) {
     if (!installedVersions.length) {
