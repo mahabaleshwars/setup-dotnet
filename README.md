@@ -335,7 +335,7 @@ A locally installed SDK is reused only when it satisfies all of the following, o
 - it matches the requested `dotnet-quality` (`preview` and `daily` require a prerelease SDK, any other value requires a GA one). An exact version such as `8.0.404` is matched as-is, so `dotnet-quality` does not apply to it;
 - the `dotnet` executable is present next to the SDK folders.
 
-Requests that cannot be resolved without the .NET release metadata are always installed online, even with `check-latest: false`. This covers `dotnet-version: latest` combined with `dotnet-channel: LTS` or `STS`, a bare wildcard (`dotnet-version: x`, `X` or `*`) and a `global.json` with `rollForward: latestMajor`, which all resolve to the LTS channel. Wildcards that are qualified with a major or minor version, such as `8.x` or `8.0.x`, and the `latestMinor`, `latestFeature` and `latestPatch` policies are still eligible for local reuse.
+Requests that carry no major/minor version and therefore need the .NET release metadata to be resolved are always installed online, even with `check-latest: false`. This covers `dotnet-version: latest` combined with `dotnet-channel: LTS` or `STS`, a bare wildcard (`dotnet-version: x`, `X` or `*`) and a `global.json` with `rollForward: latestMajor`, which all resolve to the `LTS` channel. Wildcards that are qualified with a major or minor version, such as `8.x` or `8.0.x`, a bare `latest` and the `latestMinor`, `latestFeature` and `latestPatch` policies are still eligible for local reuse.
 
 # Outputs and environment variables
 
