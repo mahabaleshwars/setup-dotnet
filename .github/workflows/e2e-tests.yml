@@ -739,7 +739,7 @@ jobs:
         shell: pwsh
         run: __tests__/verify-dotnet.ps1 -Patterns "^9\.0\.1\d{2}"
 
-  test-check-latest-false-reuses-pinned-version:
+  test-check-latest-false:
     runs-on: ${{ matrix.operating-system }}
     strategy:
       fail-fast: false
@@ -751,24 +751,21 @@ jobs:
       - name: Clear toolcache
         shell: pwsh
         run: __tests__/clear-toolcache.ps1 ${{ runner.os }}
-      - name: Preinstall a pinned SDK online
+      # Oldest 9.0.1xx SDK: resolving '9.0.1xx' online would return a newer patch.
+      - name: Setup dotnet 9.0.100
         uses: ./
         with:
-          dotnet-version: '8.0.412'
-      - name: Request the same SDK with check-latest false
+          dotnet-version: '9.0.100'
+      - name: Setup dotnet 9.0.1xx with check-latest false
         id: reuse
         uses: ./
         with:
-          dotnet-version: '8.0.412'
+          dotnet-version: '9.0.1xx'
           check-latest: false
-      - name: The locally installed SDK is reused
-        shell: pwsh
-        run: |
-          $reused = '${{ steps.reuse.outputs.dotnet-version }}'
-          Write-Host "reused: $reused"
-          if ($reused -ne '8.0.412') {
-            throw "Expected the preinstalled 8.0.412 to be reused, got '$reused'."
-          }
       - name: Verify dotnet
         shell: pwsh
-        run: __tests__/verify-dotnet.ps1 -Patterns "^8\.0\.412$"
+        run: |
+          if ('${{ steps.reuse.outputs.dotnet-version }}' -ne '9.0.100') {
+            throw "Expected 9.0.100 to be reused, got '${{ steps.reuse.outputs.dotnet-version }}'."
+          }
+          __tests__/verify-dotnet.ps1 -Patterns "^9\.0\.100$"
