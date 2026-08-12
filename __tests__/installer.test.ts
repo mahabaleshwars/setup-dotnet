@@ -624,6 +624,25 @@ describe('installer tests', () => {
         expect(getExecOutputSpy).not.toHaveBeenCalled();
       });
 
+      it('rejects an A.B.Cxx request below .NET 5 instead of reusing a local SDK', async () => {
+        readdirSyncSpy.mockReturnValue(makeDirents(['3.1.100']));
+
+        const dotnetInstaller = new installer.DotnetCoreInstaller(
+          '3.1.1xx',
+          '',
+          undefined,
+          undefined,
+          false
+        );
+
+        // The online path owns the validation, so the error has to stay the
+        // same regardless of what is installed locally.
+        await expect(dotnetInstaller.installDotnet()).rejects.toThrow(
+          `The 'dotnet-version' was supplied in invalid format: 3.1.1xx! The A.B.Cxx syntax is available since the .NET 5.0 release.`
+        );
+        expect(getExecOutputSpy).not.toHaveBeenCalled();
+      });
+
       it('picks the highest installed SDK for a channel-less latest request', async () => {
         readdirSyncSpy.mockReturnValue(makeDirents(['8.0.412', '9.0.101']));
 

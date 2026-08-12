@@ -31,6 +31,14 @@ type SupportedArchitecture = (typeof supportedArchitectures)[number];
 
 export type QualityOptions = (typeof qualityOptions)[number] | '';
 
+/**
+ * Environment variable that mirrors the 'check-latest' input. Workflows that
+ * GitHub generates and runs on the user's behalf (Automatic Dependency
+ * Submission, for example) cannot be edited, so the runner environment is the
+ * only configuration surface their users have.
+ */
+const CHECK_LATEST_ENV_VAR = 'DOTNET_CHECK_LATEST';
+
 function isValidChannel(channel: string): boolean {
   const upper = channel.toUpperCase();
   if (upper === 'LTS' || upper === 'STS') return true;
@@ -68,7 +76,7 @@ export async function run() {
     };
     const installedDotnetVersions: (string | null)[] = [];
     const architecture = getArchitectureInput();
-    const checkLatest = core.getBooleanInput('check-latest');
+    const checkLatest = getCheckLatestInput();
     let dotnetChannel = core.getInput('dotnet-channel');
 
     const isLatestRequested = versions.some(
@@ -213,6 +221,38 @@ function getArchitectureInput(): SupportedArchitecture | '' {
       ', '
     )}.`
   );
+}
+
+/**
+ * Resolves 'check-latest' from the workflow input, then from
+ * DOTNET_CHECK_LATEST, then from the default. 'action.yml' deliberately
+ * declares no default for the input: the runner materializes action defaults
+ * into INPUT_CHECK_LATEST, which would make the input look explicitly set on
+ * every run and hide the environment variable.
+ */
+function getCheckLatestInput(): boolean {
+  // An explicitly supplied input always wins and is validated strictly.
+  if ((core.getInput('check-latest') || '').trim()) {
+    return core.getBooleanInput('check-latest');
+  }
+
+  const rawEnvValue = (process.env[CHECK_LATEST_ENV_VAR] || '').trim();
+  if (rawEnvValue) {
+    const envValue = rawEnvValue.toLowerCase();
+    if (envValue === 'true' || envValue === 'false') {
+      core.debug(
+        `The 'check-latest' option is set to '${envValue}' by the ${CHECK_LATEST_ENV_VAR} environment variable.`
+      );
+      return envValue === 'true';
+    }
+    // A generated workflow cannot be corrected by the user, so an unusable
+    // value must warn and fall back instead of failing the run.
+    core.warning(
+      `Value '${rawEnvValue}' is not supported for the ${CHECK_LATEST_ENV_VAR} environment variable. Supported values are: true, false. The 'check-latest' option falls back to 'true'.`
+    );
+  }
+
+  return true;
 }
 
 interface GlobalJsonVersion {

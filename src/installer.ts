@@ -561,8 +561,13 @@ export class DotnetCoreInstaller {
 
     // Feature band A.B.Cxx (e.g. 8.0.1xx). Only lowercase is accepted here,
     // because the online resolver rejects 'A.B.CXX' as an invalid format.
+    // The syntax exists only since .NET 5, so an older major is left to the
+    // online path, which rejects it with the proper error message.
     const bandMatch = this.version.match(/^(\d+)\.(\d+)\.(\d)xx$/);
     if (bandMatch) {
+      if (Number(bandMatch[1]) < LATEST_PATCH_SYNTAX_MINIMAL_MAJOR_TAG) {
+        return null;
+      }
       return this.findByFeatureBand(
         candidates,
         bandMatch[1],

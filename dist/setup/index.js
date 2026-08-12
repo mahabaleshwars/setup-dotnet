@@ -45485,8 +45485,13 @@ class DotnetCoreInstaller {
         }
         // Feature band A.B.Cxx (e.g. 8.0.1xx). Only lowercase is accepted here,
         // because the online resolver rejects 'A.B.CXX' as an invalid format.
+        // The syntax exists only since .NET 5, so an older major is left to the
+        // online path, which rejects it with the proper error message.
         const bandMatch = this.version.match(/^(\d+)\.(\d+)\.(\d)xx$/);
         if (bandMatch) {
+            if (Number(bandMatch[1]) < LATEST_PATCH_SYNTAX_MINIMAL_MAJOR_TAG) {
+                return null;
+            }
             return this.findByFeatureBand(candidates, bandMatch[1], bandMatch[2], bandMatch[3]);
         }
         // A.B or A.B.x / A.B.X / A.B.* (e.g. 8.0, 8.0.x). semver treats 'x', 'X'
@@ -106735,6 +106740,13 @@ const supportedArchitectures = [
     'ppc64le',
     'riscv64'
 ];
+/**
+ * Environment variable that mirrors the 'check-latest' input. Workflows that
+ * GitHub generates and runs on the user's behalf (Automatic Dependency
+ * Submission, for example) cannot be edited, so the runner environment is the
+ * only configuration surface their users have.
+ */
+const CHECK_LATEST_ENV_VAR = 'DOTNET_CHECK_LATEST';
 function isValidChannel(channel) {
     const upper = channel.toUpperCase();
     if (upper === 'LTS' || upper === 'STS')
@@ -106773,7 +106785,7 @@ async function run() {
         };
         const installedDotnetVersions = [];
         const architecture = getArchitectureInput();
-        const checkLatest = getBooleanInput('check-latest');
+        const checkLatest = getCheckLatestInput();
         let dotnetChannel = getInput('dotnet-channel');
         const isLatestRequested = versions.some(version => version && version.toLowerCase() === 'latest');
         if (dotnetChannel && !isValidChannel(dotnetChannel)) {
@@ -106870,6 +106882,31 @@ function getArchitectureInput() {
         return normalizeArch(normalized);
     }
     throw new Error(`Value '${raw}' is not supported for the 'architecture' option. Supported values are: ${supportedArchitectures.join(', ')}.`);
+}
+/**
+ * Resolves 'check-latest' from the workflow input, then from
+ * DOTNET_CHECK_LATEST, then from the default. 'action.yml' deliberately
+ * declares no default for the input: the runner materializes action defaults
+ * into INPUT_CHECK_LATEST, which would make the input look explicitly set on
+ * every run and hide the environment variable.
+ */
+function getCheckLatestInput() {
+    // An explicitly supplied input always wins and is validated strictly.
+    if ((getInput('check-latest') || '').trim()) {
+        return getBooleanInput('check-latest');
+    }
+    const rawEnvValue = (process.env[CHECK_LATEST_ENV_VAR] || '').trim();
+    if (rawEnvValue) {
+        const envValue = rawEnvValue.toLowerCase();
+        if (envValue === 'true' || envValue === 'false') {
+            core_debug(`The 'check-latest' option is set to '${envValue}' by the ${CHECK_LATEST_ENV_VAR} environment variable.`);
+            return envValue === 'true';
+        }
+        // A generated workflow cannot be corrected by the user, so an unusable
+        // value must warn and fall back instead of failing the run.
+        warning(`Value '${rawEnvValue}' is not supported for the ${CHECK_LATEST_ENV_VAR} environment variable. Supported values are: true, false. The 'check-latest' option falls back to 'true'.`);
+    }
+    return true;
 }
 function getVersionFromGlobalJson(globalJsonPath) {
     let version = '';

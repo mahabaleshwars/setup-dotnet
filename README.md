@@ -105,7 +105,7 @@ steps:
 
 ## Using the `dotnet-quality` input
 
-The `dotnet-quality` input installs the latest build of the specified quality in the channel. Supported values: `daily`, `preview`, `ga`.
+The `dotnet-quality` input installs the latest build of the specified quality in the channel. Supported values: `daily`, `preview`, `ga`. For more details about quality options, see the [official .NET documentation](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-install-script#options).
 
 > **Note**: When used with a specific SDK version, `dotnet-quality` supports only `A.B`, `A.B.x`, `A`, `A.x`, and `A.B.Cxx` formats where the major version is higher than 5. For all other formats, `dotnet-quality` will be ignored.
 
@@ -337,6 +337,33 @@ A locally installed SDK is reused only when it satisfies all of the following, o
 
 Requests that carry no major/minor version and therefore need the .NET release metadata to be resolved are always installed online, even with `check-latest: false`. This covers `dotnet-version: latest` combined with `dotnet-channel: LTS` or `STS`, a bare wildcard (`dotnet-version: x`, `X` or `*`) and a `global.json` with `rollForward: latestMajor`, which all resolve to the `LTS` channel. Wildcards that are qualified with a major or minor version, such as `8.x` or `8.0.x`, a bare `latest` and the `latestMinor`, `latestFeature` and `latestPatch` policies are still eligible for local reuse.
 
+### Setting `check-latest` from the environment
+
+Some workflows are generated and run by GitHub on your behalf and cannot be edited, so there is no `with:` block to add `check-latest` to. [Automatic dependency submission](https://docs.github.com/en/code-security/reference/supply-chain-security/automatic-dependency-submission) for .NET is the main example: it runs this action with floating versions (`8.0.x`, `9.0.x`, `10.0.x`), which always take the online resolution path.
+
+For those cases the action also reads the `DOTNET_CHECK_LATEST` environment variable. The resolution order is:
+
+1. the `check-latest` input, when it is set in the workflow;
+2. the `DOTNET_CHECK_LATEST` environment variable (`true` or `false`, case-insensitive);
+3. `true`, the default.
+
+An unsupported value in the environment variable is reported as a warning and ignored, so a misconfigured runner never fails a workflow that could not have set the input anyway.
+
+> **Note**: `check-latest` declares no `default` in `action.yml`. The runner materializes action defaults into the input, which would make the input look explicitly set on every run and hide the environment variable, so the `true` default is applied by the action itself instead.
+
+```yaml
+steps:
+- uses: actions/checkout@v7
+- uses: actions/setup-dotnet@v6
+  env:
+    DOTNET_CHECK_LATEST: false
+  with:
+    dotnet-version: '8.0.x'
+- run: dotnet build <my project>
+```
+
+For a workflow you do not own, set `DOTNET_CHECK_LATEST` in the environment of the self-hosted runner itself, for example in the runner application's `.env` file. Together with SDKs preinstalled under [`DOTNET_INSTALL_DIR`](#environment-variables), this lets automatic dependency submission run without reaching `aka.ms`, `builds.dotnet.microsoft.com` or `ci.dot.net`. Note that a runner-level variable applies to every job scheduled on that runner, so a dedicated runner is recommended; any workflow you do own can still override it with an explicit `check-latest` input.
+
 # Outputs and environment variables
 
 ## Outputs
@@ -395,6 +422,7 @@ Some environment variables may be necessary for your particular case or to impro
 | **Env.variable**      | **Description** | **Default value** |
 | ----------- | ----------- | ----------- |
 | DOTNET_INSTALL_DIR      |Specifies a directory where .NET SDKs should be installed by the action.|*default value for each OS* |
+| DOTNET_CHECK_LATEST |Fallback for the [`check-latest`](#setting-check-latest-from-the-environment) input, for workflows that cannot set it. Ignored when the input is set.|*true*|
 | DOTNET_NOLOGO      |Removes logo and telemetry message from first run of dotnet cli|*false*|
 | DOTNET_CLI_TELEMETRY_OPTOUT   |Opt-out of telemetry being sent to Microsoft|*false*|
 | DOTNET_MULTILEVEL_LOOKUP   |Configures whether the global install location is used as a fall-back|*true*|

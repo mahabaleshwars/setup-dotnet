@@ -86,11 +86,18 @@ describe('setup-dotnet tests', () => {
       DotnetInstallDir.addToPath = jest.fn();
       getMultilineInputSpy.mockImplementation(input => inputs[input as string]);
       getInputSpy.mockImplementation(input => inputs[input as string]);
-      getBooleanInputSpy.mockImplementation(input => inputs[input as string]);
+      // Mirrors core.getBooleanInput(), which only ever sees strings.
+      getBooleanInputSpy.mockImplementation(input => {
+        const value = inputs[input as string];
+        return typeof value === 'string'
+          ? value.toLowerCase() === 'true'
+          : !!value;
+      });
     });
 
     afterEach(() => {
       DotnetInstallDir.addToPath = addToPathOriginal;
+      delete process.env['DOTNET_CHECK_LATEST'];
       jest.clearAllMocks();
       jest.resetAllMocks();
     });
@@ -294,7 +301,7 @@ describe('setup-dotnet tests', () => {
       inputs['dotnet-version'] = ['10.0.101'];
       inputs['dotnet-quality'] = '';
       inputs['architecture'] = '';
-      inputs['check-latest'] = false;
+      inputs['check-latest'] = 'false';
 
       let capturedCheckLatest: boolean | undefined;
       installDotnetSpy.mockImplementation(function (this: any) {
@@ -307,6 +314,58 @@ describe('setup-dotnet tests', () => {
       expect(getBooleanInputSpy).toHaveBeenCalledWith('check-latest');
       expect(installDotnetSpy).toHaveBeenCalledTimes(1);
       expect(capturedCheckLatest).toBe(false);
+    });
+
+    describe("'check-latest' resolution", () => {
+      const captureCheckLatest = async () => {
+        inputs['dotnet-version'] = ['10.0.101'];
+        inputs['dotnet-quality'] = '';
+        inputs['architecture'] = '';
+
+        let capturedCheckLatest: boolean | undefined;
+        installDotnetSpy.mockImplementation(function (this: any) {
+          capturedCheckLatest = this.checkLatest;
+          return Promise.resolve('');
+        });
+
+        await setup.run();
+        return capturedCheckLatest;
+      };
+
+      it('defaults to true when neither the input nor the environment variable is set', async () => {
+        inputs['check-latest'] = '';
+
+        expect(await captureCheckLatest()).toBe(true);
+        expect(getBooleanInputSpy).not.toHaveBeenCalledWith('check-latest');
+      });
+
+      it.each(['false', 'FALSE', 'False'])(
+        "reads 'check-latest' from the DOTNET_CHECK_LATEST environment variable ('%s')",
+        async envValue => {
+          inputs['check-latest'] = '';
+          process.env['DOTNET_CHECK_LATEST'] = envValue;
+
+          expect(await captureCheckLatest()).toBe(false);
+        }
+      );
+
+      it('lets an explicit input win over the environment variable', async () => {
+        inputs['check-latest'] = 'true';
+        process.env['DOTNET_CHECK_LATEST'] = 'false';
+
+        expect(await captureCheckLatest()).toBe(true);
+      });
+
+      it('warns and falls back to true when the environment variable is not a boolean', async () => {
+        inputs['check-latest'] = '';
+        process.env['DOTNET_CHECK_LATEST'] = 'yes';
+
+        expect(await captureCheckLatest()).toBe(true);
+        expect(warningSpy).toHaveBeenCalledWith(
+          `Value 'yes' is not supported for the DOTNET_CHECK_LATEST environment variable. Supported values are: true, false. The 'check-latest' option falls back to 'true'.`
+        );
+        expect(setFailedSpy).not.toHaveBeenCalled();
+      });
     });
 
     it('should fail the action if unsupported architecture is provided', async () => {
@@ -415,7 +474,7 @@ describe('setup-dotnet tests', () => {
       inputs['dotnet-quality'] = '';
       inputs['dotnet-channel'] = '';
       inputs['architecture'] = '';
-      inputs['check-latest'] = false;
+      inputs['check-latest'] = 'false';
       inputs['global-json-file'] = 'global.json';
 
       existsSyncSpy.mockReturnValue(true);
