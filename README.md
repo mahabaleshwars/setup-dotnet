@@ -313,7 +313,7 @@ steps:
 
 By default (`check-latest: true`) the action resolves and installs the latest available version that satisfies the requested version spec online. This matches the historical behavior, so existing workflows are unaffected.
 
-When `check-latest: false`, the action first looks for an SDK that is already installed under the [`DOTNET_INSTALL_DIR`](#environment-variables) directory. If a locally installed SDK satisfies the request, it is reused and **all network calls needed to resolve and install the SDK are skipped** (including the runtime pre-install). This is useful for air-gapped or preloaded runners. If no local SDK satisfies the request, the action falls back to the normal online installation.
+When `check-latest: false`, the action first looks for an SDK that is already installed under the [`DOTNET_INSTALL_DIR`](#environment-variables) directory. If a locally installed SDK satisfies the request, it is reused and **all network calls needed to resolve and install the SDK are skipped** (including the runtime pre-install), which is useful for air-gapped or preloaded runners. Otherwise the action falls back to the normal online installation.
 
 ```yaml
 steps:
@@ -326,43 +326,21 @@ steps:
 - run: dotnet build <my project>
 ```
 
-> **Note**: `check-latest: false` does not apply to cross-architecture requests. When the requested `architecture` differs from the runner's native architecture, the action always installs online (and fails when offline), to avoid reusing an SDK built for the wrong architecture.
+A locally installed SDK is reused only when all of the following hold, otherwise the action installs online:
 
-A locally installed SDK is reused only when it satisfies all of the following, otherwise the action installs online:
-
-- it matches the requested version spec (`A.B.C`, `A.B`, `A.B.x`, `A.B.Cxx`, `A`, `A.x` or `latest`). In the wildcard position, `x`, `X` and `*` are equivalent, so `A.B.X`, `A.B.*`, `A.X` and `A.*` are accepted as well;
+- it matches the requested version spec (`A.B.C`, `A.B`, `A.B.x`, `A.B.Cxx`, `A`, `A.x` or `latest`). In the wildcard position, `x`, `X` and `*` are equivalent;
 - it is not older than the `sdk.version` declared in `global.json`, because `rollForward` only ever rolls forward;
 - it matches the requested `dotnet-quality` (`preview` and `daily` require a prerelease SDK, any other value requires a GA one). An exact version such as `8.0.404` is matched as-is, so `dotnet-quality` does not apply to it;
-- the `dotnet` executable is present next to the SDK folders.
+- the `dotnet` executable is present next to the SDK folders;
+- the requested `architecture` is the runner's native one. Cross-architecture requests always install online, to avoid reusing an SDK built for the wrong architecture.
 
-Requests that carry no major/minor version and therefore need the .NET release metadata to be resolved are always installed online, even with `check-latest: false`. This covers `dotnet-version: latest` combined with `dotnet-channel: LTS` or `STS`, a bare wildcard (`dotnet-version: x`, `X` or `*`) and a `global.json` with `rollForward: latestMajor`, which all resolve to the `LTS` channel. Wildcards that are qualified with a major or minor version, such as `8.x` or `8.0.x`, a bare `latest` and the `latestMinor`, `latestFeature` and `latestPatch` policies are still eligible for local reuse.
+Requests that need the .NET release metadata to be resolved also always install online: `dotnet-version: latest` combined with `dotnet-channel: LTS` or `STS`, a bare wildcard (`x`, `X` or `*`) and a `global.json` with `rollForward: latestMajor`.
 
 ### Setting `check-latest` from the environment
 
-Some workflows are generated and run by GitHub on your behalf and cannot be edited, so there is no `with:` block to add `check-latest` to. [Automatic dependency submission](https://docs.github.com/en/code-security/reference/supply-chain-security/automatic-dependency-submission) for .NET is the main example: it runs this action with floating versions (`8.0.x`, `9.0.x`, `10.0.x`), which always take the online resolution path.
+When the input is not set, the action reads the `DOTNET_CHECK_LATEST` environment variable instead (`true` or `false`, case-insensitive; an unsupported value is warned about and ignored). This covers workflows you cannot edit to add a `check-latest` input.
 
-For those cases the action also reads the `DOTNET_CHECK_LATEST` environment variable. The resolution order is:
-
-1. the `check-latest` input, when it is set in the workflow;
-2. the `DOTNET_CHECK_LATEST` environment variable (`true` or `false`, case-insensitive);
-3. `true`, the default.
-
-An unsupported value in the environment variable is reported as a warning and ignored, so a misconfigured runner never fails a workflow that could not have set the input anyway.
-
-> **Note**: `check-latest` declares no `default` in `action.yml`. The runner materializes action defaults into the input, which would make the input look explicitly set on every run and hide the environment variable, so the `true` default is applied by the action itself instead.
-
-```yaml
-steps:
-- uses: actions/checkout@v7
-- uses: actions/setup-dotnet@v6
-  env:
-    DOTNET_CHECK_LATEST: false
-  with:
-    dotnet-version: '8.0.x'
-- run: dotnet build <my project>
-```
-
-For a workflow you do not own, set `DOTNET_CHECK_LATEST` in the environment of the self-hosted runner itself, for example in the runner application's `.env` file. Together with SDKs preinstalled under [`DOTNET_INSTALL_DIR`](#environment-variables), this lets automatic dependency submission run without reaching `aka.ms`, `builds.dotnet.microsoft.com` or `ci.dot.net`. Note that a runner-level variable applies to every job scheduled on that runner, so a dedicated runner is recommended; any workflow you do own can still override it with an explicit `check-latest` input.
+Setting `DOTNET_CHECK_LATEST` in the environment of a self-hosted runner, together with SDKs preinstalled under [`DOTNET_INSTALL_DIR`](#environment-variables), lets such workflows run without reaching `aka.ms`, `builds.dotnet.microsoft.com` or `ci.dot.net`. A runner-level variable applies to every job scheduled on that runner, so a dedicated runner is recommended; any workflow can still override it with an explicit `check-latest` input.
 
 # Outputs and environment variables
 
