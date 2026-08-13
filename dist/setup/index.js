@@ -45361,6 +45361,7 @@ class DotnetCoreInstaller {
     dotnetChannel;
     checkLatest;
     minimumVersion;
+    static FeatureBandSyntax = /^(\d+)\.(\d+)\.(\d)xx$/;
     static {
         DotnetInstallDir.setEnvironmentVariable();
     }
@@ -45378,7 +45379,8 @@ class DotnetCoreInstaller {
     }
     /**
      * Enumerates the SDK versions already installed under the install directory.
-     * Returns only entries that are valid semver versions.
+     * Returns only entries that are valid semver versions and contain a usable
+     * SDK.
      */
     getInstalledSdkVersions() {
         const sdkDir = external_path_default().join(DotnetInstallDir.dirPath, 'sdk');
@@ -45388,7 +45390,12 @@ class DotnetCoreInstaller {
                 // copying them, so symlinks have to be treated as directories.
                 .filter(entry => entry.isDirectory() || entry.isSymbolicLink())
                 .map(entry => entry.name)
-                .filter(name => semver_default().valid(name) !== null);
+                .filter(name => semver_default().valid(name) !== null)
+                // An emptied folder left over by a failed install (or a dangling
+                // symlink) still has a version-shaped name, so the SDK entry point has
+                // to be present as well. 'existsSync' resolves symlinks, which also
+                // filters out broken ones.
+                .filter(name => (0,external_fs_namespaceObject.existsSync)(external_path_default().join(sdkDir, name, 'dotnet.dll')));
             core_debug(`Locally installed .NET SDKs in '${sdkDir}': ${versions.join(', ') || '<none>'}`);
             return versions;
         }
@@ -45405,6 +45412,19 @@ class DotnetCoreInstaller {
      */
     hasDotnetMuxer() {
         return (0,external_fs_namespaceObject.existsSync)(external_path_default().join(DotnetInstallDir.dirPath, utils_IS_WINDOWS ? 'dotnet.exe' : 'dotnet'));
+    }
+    /**
+     * Mirrors DotnetVersionResolver's quality gating: the 'dotnet-quality' input
+     * is only honored when the requested major tag is .NET 6 or higher. An
+     * unknown major (bare 'latest', wildcards, LTS/STS) resolves to a supported
+     * channel online, so quality applies there.
+     */
+    qualityApplies() {
+        const source = this.version.toLowerCase() === 'latest'
+            ? (this.dotnetChannel || '').trim()
+            : this.version;
+        const major = source.match(/^(\d+)/)?.[1];
+        return major ? Number(major) >= QUALITY_INPUT_MINIMAL_MAJOR_TAG : true;
     }
     findByMajorMinor(candidates, major, minor) {
         return (candidates.find(version => {
@@ -45453,9 +45473,22 @@ class DotnetCoreInstaller {
         if (semver_default().valid(this.version)) {
             return allowed.find(version => version === this.version) ?? null;
         }
+        // Reuse the resolver's own validation so that inputs it rejects (e.g. the
+        // leading zeros in '08.0.x' or '8.00') are never matched locally and reach
+        // the online path, which throws the proper error. 'latest' and the A.B.Cxx
+        // syntax are not semver ranges and are validated separately.
+        if (this.version.toLowerCase() !== 'latest' &&
+            !DotnetCoreInstaller.FeatureBandSyntax.test(this.version) &&
+            !semver_default().validRange(this.version)) {
+            core_debug(`The requested version '${this.version}' is not a valid version spec. Locally installed SDKs are ignored.`);
+            return null;
+        }
         // For floating/channel/latest requests, honor the quality input: 'preview'
         // and 'daily' ask for prerelease builds, every other value requires GA.
-        const wantsPrerelease = ['preview', 'daily'].includes((this.quality || '').toLowerCase());
+        // The install script ignores 'dotnet-quality' below .NET 6, so a prerelease
+        // must not be reused locally for those versions either.
+        const wantsPrerelease = ['preview', 'daily'].includes((this.quality || '').toLowerCase()) &&
+            this.qualityApplies();
         const candidates = allowed
             .filter(version => wantsPrerelease
             ? semver_default().prerelease(version) !== null
@@ -45487,7 +45520,7 @@ class DotnetCoreInstaller {
         // because the online resolver rejects 'A.B.CXX' as an invalid format.
         // The syntax exists only since .NET 5, so an older major is left to the
         // online path, which rejects it with the proper error message.
-        const bandMatch = this.version.match(/^(\d+)\.(\d+)\.(\d)xx$/);
+        const bandMatch = this.version.match(DotnetCoreInstaller.FeatureBandSyntax);
         if (bandMatch) {
             if (Number(bandMatch[1]) < LATEST_PATCH_SYNTAX_MINIMAL_MAJOR_TAG) {
                 return null;

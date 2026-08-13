@@ -969,6 +969,67 @@ describe('installer tests', () => {
           `The 'dotnet-version' was supplied in invalid format: 8.0.1XX!`
         );
       });
+
+      each(['08.0.x', '8.00.x', '08']).it(
+        'does not reuse a local SDK for the invalid request %s',
+        async (version: string) => {
+          readdirSyncSpy.mockReturnValue(makeDirents(['8.0.412']));
+
+          const dotnetInstaller = new installer.DotnetCoreInstaller(
+            version,
+            '',
+            undefined,
+            undefined,
+            false
+          );
+
+          // The online resolver rejects leading zeros, so matching them
+          // locally would turn an invalid input into a silent success.
+          await expect(dotnetInstaller.installDotnet()).rejects.toThrow(
+            `The 'dotnet-version' was supplied in invalid format: ${version}!`
+          );
+        }
+      );
+
+      it('ignores an sdk folder that does not contain an SDK', async () => {
+        readdirSyncSpy.mockReturnValue(makeDirents(['8.0.412']));
+        // The muxer exists, but the sdk/8.0.412 folder is empty.
+        existsSyncSpy.mockImplementation(
+          (target: string) => !target.includes('dotnet.dll')
+        );
+        maxSatisfyingSpy.mockImplementation(() => '8.0.412');
+
+        const dotnetInstaller = new installer.DotnetCoreInstaller(
+          '8.0.x',
+          '',
+          undefined,
+          undefined,
+          false
+        );
+        await dotnetInstaller.installDotnet();
+
+        expect(getExecOutputSpy).toHaveBeenCalledTimes(2);
+      });
+
+      it('ignores the quality input for majors below 6 when matching locally', async () => {
+        readdirSyncSpy.mockReturnValue(
+          makeDirents(['3.1.426', '3.1.500-preview.1'])
+        );
+
+        const dotnetInstaller = new installer.DotnetCoreInstaller(
+          '3.1',
+          'preview',
+          undefined,
+          undefined,
+          false
+        );
+        const installedVersion = await dotnetInstaller.installDotnet();
+
+        // The install script ignores 'dotnet-quality' below .NET 6, so the
+        // online path would select the GA build here as well.
+        expect(installedVersion).toBe('3.1.426');
+        expect(getExecOutputSpy).not.toHaveBeenCalled();
+      });
     });
 
     describe('addToPath() tests', () => {
