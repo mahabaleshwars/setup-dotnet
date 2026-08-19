@@ -45375,19 +45375,19 @@ class DotnetInstallDir {
         // not a breaking change because it only triggers in scenarios that
         // previously failed.
         if (DotnetInstallDir.isDirectoryWritable(fallbackPath)) {
-            info(`The default .NET install directory '${defaultPath}' is not writable by the current user. Falling back to '${fallbackPath}'. Set the 'DOTNET_INSTALL_DIR' environment variable to override this location.`);
+            warning(`The default .NET install directory '${defaultPath}' is not writable by the current user. Falling back to '${fallbackPath}'. Set the 'DOTNET_INSTALL_DIR' environment variable to override this location.`);
             return fallbackPath;
         }
         // 5. Last resort: use a temporary directory when it is distinct from the
         // home fallback and writable.
         if (external_path_default().normalize(tempFallbackPath) !== external_path_default().normalize(fallbackPath) &&
             DotnetInstallDir.isDirectoryWritable(tempFallbackPath)) {
-            info(`Neither the default .NET install directory '${defaultPath}' nor '${fallbackPath}' are writable by the current user. Falling back to '${tempFallbackPath}'. Set the 'DOTNET_INSTALL_DIR' environment variable to override this location.`);
+            warning(`Neither the default .NET install directory '${defaultPath}' nor '${fallbackPath}' are writable by the current user. Falling back to '${tempFallbackPath}'. Set the 'DOTNET_INSTALL_DIR' environment variable to override this location.`);
             return tempFallbackPath;
         }
         // 6. Nothing is writable. Return the home fallback as a best effort and
         // surface a message so the failure is diagnosable.
-        info(`The default .NET install directory '${defaultPath}' is not writable by the current user. Falling back to '${fallbackPath}'. Set the 'DOTNET_INSTALL_DIR' environment variable to override this location.`);
+        warning(`None of the candidate .NET install directories are writable by the current user: '${defaultPath}', '${fallbackPath}', '${tempFallbackPath}'. Falling back to '${fallbackPath}', but the installation is likely to fail. Set the 'DOTNET_INSTALL_DIR' environment variable to a writable location.`);
         return fallbackPath;
     }
     /**

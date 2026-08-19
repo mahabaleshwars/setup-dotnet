@@ -408,7 +408,7 @@ export abstract class DotnetInstallDir {
     // not a breaking change because it only triggers in scenarios that
     // previously failed.
     if (DotnetInstallDir.isDirectoryWritable(fallbackPath)) {
-      core.info(
+      core.warning(
         `The default .NET install directory '${defaultPath}' is not writable by the current user. Falling back to '${fallbackPath}'. Set the 'DOTNET_INSTALL_DIR' environment variable to override this location.`
       );
       return fallbackPath;
@@ -420,7 +420,7 @@ export abstract class DotnetInstallDir {
       path.normalize(tempFallbackPath) !== path.normalize(fallbackPath) &&
       DotnetInstallDir.isDirectoryWritable(tempFallbackPath)
     ) {
-      core.info(
+      core.warning(
         `Neither the default .NET install directory '${defaultPath}' nor '${fallbackPath}' are writable by the current user. Falling back to '${tempFallbackPath}'. Set the 'DOTNET_INSTALL_DIR' environment variable to override this location.`
       );
       return tempFallbackPath;
@@ -428,8 +428,8 @@ export abstract class DotnetInstallDir {
 
     // 6. Nothing is writable. Return the home fallback as a best effort and
     // surface a message so the failure is diagnosable.
-    core.info(
-      `The default .NET install directory '${defaultPath}' is not writable by the current user. Falling back to '${fallbackPath}'. Set the 'DOTNET_INSTALL_DIR' environment variable to override this location.`
+    core.warning(
+      `None of the candidate .NET install directories are writable by the current user: '${defaultPath}', '${fallbackPath}', '${tempFallbackPath}'. Falling back to '${fallbackPath}', but the installation is likely to fail. Set the 'DOTNET_INSTALL_DIR' environment variable to a writable location.`
     );
     return fallbackPath;
   }

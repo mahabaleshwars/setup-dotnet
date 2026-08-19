@@ -538,7 +538,7 @@ describe('installer tests', () => {
   });
 
   describe('DotnetInstallDir tests', () => {
-    const infoSpy = core.info as jest.Mock;
+    const warningSpy = core.warning as jest.Mock;
 
     describe('isDirectoryWritable() tests', () => {
       const actualFs = jest.requireActual<typeof import('fs')>('fs');
@@ -641,7 +641,7 @@ describe('installer tests', () => {
           installer.DotnetInstallDir,
           'isDirectoryWritable'
         );
-        infoSpy.mockClear();
+        warningSpy.mockClear();
       });
 
       afterEach(() => {
@@ -681,7 +681,7 @@ describe('installer tests', () => {
         );
 
         expect(result).toBe(defaultPath);
-        expect(infoSpy).not.toHaveBeenCalled();
+        expect(warningSpy).not.toHaveBeenCalled();
       });
 
       it('falls back to the home directory when the default is not writable but home is', () => {
@@ -695,7 +695,14 @@ describe('installer tests', () => {
         );
 
         expect(result).toBe(fallbackPath);
-        expect(infoSpy).toHaveBeenCalledTimes(1);
+        expect(warningSpy).toHaveBeenCalledTimes(1);
+        expect(warningSpy.mock.calls[0][0]).toContain(defaultPath);
+        expect(warningSpy.mock.calls[0][0]).toContain(
+          'is not writable by the current user'
+        );
+        expect(warningSpy.mock.calls[0][0]).toContain(
+          `Falling back to '${fallbackPath}'`
+        );
       });
 
       it('falls back to the temp directory when neither the default nor home are writable', () => {
@@ -712,7 +719,10 @@ describe('installer tests', () => {
         );
 
         expect(result).toBe(tempFallbackPath);
-        expect(infoSpy).toHaveBeenCalledTimes(1);
+        expect(warningSpy).toHaveBeenCalledTimes(1);
+        expect(warningSpy.mock.calls[0][0]).toContain(
+          `Falling back to '${tempFallbackPath}'`
+        );
       });
 
       it('returns the home fallback as a best effort when nothing is writable', () => {
@@ -726,7 +736,10 @@ describe('installer tests', () => {
         );
 
         expect(result).toBe(fallbackPath);
-        expect(infoSpy).toHaveBeenCalledTimes(1);
+        expect(warningSpy).toHaveBeenCalledTimes(1);
+        expect(warningSpy.mock.calls[0][0]).toContain(
+          'None of the candidate .NET install directories are writable'
+        );
       });
 
       it('keeps the default (no message) when it is not writable but equals the fallback', () => {
@@ -738,7 +751,7 @@ describe('installer tests', () => {
         );
 
         expect(result).toBe(fallbackPath);
-        expect(infoSpy).not.toHaveBeenCalled();
+        expect(warningSpy).not.toHaveBeenCalled();
       });
     });
   });
