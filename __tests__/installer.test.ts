@@ -742,16 +742,43 @@ describe('installer tests', () => {
         );
       });
 
-      it('keeps the default (no message) when it is not writable but equals the fallback', () => {
+      it('falls back to the temp directory when the default is the home directory and is not writable', () => {
+        const tempFallbackPath = path.join(os.tmpdir(), '.dotnet');
+        writableSpy.mockImplementation(
+          (dir: string) =>
+            path.normalize(dir) === path.normalize(tempFallbackPath)
+        );
+
+        const result = installer.DotnetInstallDir.resolveDirPath(
+          fallbackPath,
+          fallbackPath,
+          tempFallbackPath
+        );
+
+        expect(result).toBe(tempFallbackPath);
+        expect(writableSpy).toHaveBeenCalledTimes(2);
+        expect(warningSpy).toHaveBeenCalledTimes(1);
+        expect(warningSpy.mock.calls[0][0]).toContain(
+          `Falling back to '${tempFallbackPath}'`
+        );
+      });
+
+      it('does not probe the home directory twice when it is also the default', () => {
+        const tempFallbackPath = path.join(os.tmpdir(), '.dotnet');
         writableSpy.mockReturnValue(false);
 
         const result = installer.DotnetInstallDir.resolveDirPath(
           fallbackPath,
-          fallbackPath
+          fallbackPath,
+          tempFallbackPath
         );
 
         expect(result).toBe(fallbackPath);
-        expect(warningSpy).not.toHaveBeenCalled();
+        expect(writableSpy).toHaveBeenCalledTimes(2);
+        expect(warningSpy).toHaveBeenCalledTimes(1);
+        expect(warningSpy.mock.calls[0][0]).toContain(
+          'None of the candidate .NET install directories are writable'
+        );
       });
     });
   });

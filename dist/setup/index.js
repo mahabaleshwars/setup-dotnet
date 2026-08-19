@@ -45353,6 +45353,9 @@ class DotnetInstallDir {
      *   4. A last-resort temp fallback (`$RUNNER_TEMP/.dotnet` or the OS temp
      *      directory) when the home fallback is also not writable.
      *
+     * Candidates that resolve to the same directory are only probed once (on
+     * macOS the default location and the home fallback coincide).
+     *
      * The parameters are only used to make the resolution logic testable in
      * isolation; production code relies on the platform defaults.
      */
@@ -45366,28 +45369,34 @@ class DotnetInstallDir {
         if (DotnetInstallDir.isDirectoryWritable(defaultPath)) {
             return defaultPath;
         }
-        // 3. The default location is not writable. If there is no better option,
-        // keep the default rather than emitting a misleading message.
-        if (external_path_default().normalize(defaultPath) === external_path_default().normalize(fallbackPath)) {
-            return defaultPath;
-        }
-        // 4. Fall back to the user's home directory when it is writable. This is
+        // On macOS the default location already is the home fallback, so it has
+        // been probed above and must not be probed (or reported) twice.
+        const defaultIsFallback = external_path_default().normalize(defaultPath) === external_path_default().normalize(fallbackPath);
+        // 3. Fall back to the user's home directory when it is writable. This is
         // not a breaking change because it only triggers in scenarios that
         // previously failed.
-        if (DotnetInstallDir.isDirectoryWritable(fallbackPath)) {
+        if (!defaultIsFallback &&
+            DotnetInstallDir.isDirectoryWritable(fallbackPath)) {
             warning(`The default .NET install directory '${defaultPath}' is not writable by the current user. Falling back to '${fallbackPath}'. Set the 'DOTNET_INSTALL_DIR' environment variable to override this location.`);
             return fallbackPath;
         }
-        // 5. Last resort: use a temporary directory when it is distinct from the
-        // home fallback and writable.
-        if (external_path_default().normalize(tempFallbackPath) !== external_path_default().normalize(fallbackPath) &&
+        // 4. Last resort: use a temporary directory when it is distinct from the
+        // already rejected candidates and writable.
+        if (external_path_default().normalize(tempFallbackPath) !== external_path_default().normalize(defaultPath) &&
+            external_path_default().normalize(tempFallbackPath) !== external_path_default().normalize(fallbackPath) &&
             DotnetInstallDir.isDirectoryWritable(tempFallbackPath)) {
-            warning(`Neither the default .NET install directory '${defaultPath}' nor '${fallbackPath}' are writable by the current user. Falling back to '${tempFallbackPath}'. Set the 'DOTNET_INSTALL_DIR' environment variable to override this location.`);
+            const rejected = defaultIsFallback
+                ? `The default .NET install directory '${defaultPath}' is not writable by the current user.`
+                : `Neither the default .NET install directory '${defaultPath}' nor '${fallbackPath}' are writable by the current user.`;
+            warning(`${rejected} Falling back to '${tempFallbackPath}'. Set the 'DOTNET_INSTALL_DIR' environment variable to override this location.`);
             return tempFallbackPath;
         }
-        // 6. Nothing is writable. Return the home fallback as a best effort and
-        // surface a message so the failure is diagnosable.
-        warning(`None of the candidate .NET install directories are writable by the current user: '${defaultPath}', '${fallbackPath}', '${tempFallbackPath}'. Falling back to '${fallbackPath}', but the installation is likely to fail. Set the 'DOTNET_INSTALL_DIR' environment variable to a writable location.`);
+        // 5. Nothing is writable. Return the home fallback as a best effort and
+        // surface a warning so the failure is diagnosable.
+        const probedPaths = [defaultPath, fallbackPath, tempFallbackPath].filter((candidate, index, all) => all.findIndex(other => external_path_default().normalize(other) === external_path_default().normalize(candidate)) === index);
+        warning(`None of the candidate .NET install directories are writable by the current user: ${probedPaths
+            .map(candidate => `'${candidate}'`)
+            .join(', ')}. Falling back to '${fallbackPath}', but the installation is likely to fail. Set the 'DOTNET_INSTALL_DIR' environment variable to a writable location.`);
         return fallbackPath;
     }
     /**
