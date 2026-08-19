@@ -35,15 +35,21 @@ jest.unstable_mockModule('fs', () => {
   const actual = jest.requireActual('fs') as typeof import('fs');
   const chmodSync = jest.fn();
   const existsSync = jest.fn(actual.existsSync);
-  const writeFileSync = jest.fn(actual.writeFileSync);
+  const mkdtempSync = jest.fn(actual.mkdtempSync);
   const rmSync = jest.fn(actual.rmSync);
   return {
     ...actual,
     chmodSync,
     existsSync,
-    writeFileSync,
+    mkdtempSync,
     rmSync,
-    default: {...actual, chmodSync, existsSync, writeFileSync, rmSync}
+    default: {
+      ...actual,
+      chmodSync,
+      existsSync,
+      mkdtempSync,
+      rmSync
+    }
   };
 });
 
@@ -543,34 +549,42 @@ describe('installer tests', () => {
     describe('isDirectoryWritable() tests', () => {
       const actualFs = jest.requireActual<typeof import('fs')>('fs');
       const existsSyncMock = fs.existsSync as jest.Mock;
-      const writeFileSyncMock = fs.writeFileSync as jest.Mock;
+      const mkdtempSyncMock = fs.mkdtempSync as jest.Mock;
       const rmSyncMock = fs.rmSync as jest.Mock;
 
       afterEach(() => {
         existsSyncMock.mockImplementation(actualFs.existsSync);
-        writeFileSyncMock.mockImplementation(actualFs.writeFileSync);
+        mkdtempSyncMock.mockImplementation(actualFs.mkdtempSync);
         rmSyncMock.mockImplementation(actualFs.rmSync);
         existsSyncMock.mockClear();
-        writeFileSyncMock.mockClear();
+        mkdtempSyncMock.mockClear();
         rmSyncMock.mockClear();
       });
 
       it('returns true when an existing directory can be written to', () => {
         existsSyncMock.mockReturnValue(true);
-        writeFileSyncMock.mockImplementation(() => {});
+        mkdtempSyncMock.mockImplementation(
+          (prefix: string) => `${prefix}abc123`
+        );
         rmSyncMock.mockImplementation(() => {});
 
         const target = path.resolve('some', 'writable', 'dir');
         expect(installer.DotnetInstallDir.isDirectoryWritable(target)).toBe(
           true
         );
-        expect(writeFileSyncMock).toHaveBeenCalled();
-        expect(rmSyncMock).toHaveBeenCalled();
+        expect(mkdtempSyncMock).toHaveBeenCalled();
+        expect(rmSyncMock).toHaveBeenCalledWith(
+          `${target}${path.sep}.setup-dotnet-write-test-abc123`,
+          {
+            recursive: true,
+            force: true
+          }
+        );
       });
 
       it('returns false when writing to an existing directory is denied', () => {
         existsSyncMock.mockReturnValue(true);
-        writeFileSyncMock.mockImplementation(() => {
+        mkdtempSyncMock.mockImplementation(() => {
           throw Object.assign(new Error('permission denied'), {
             code: 'EACCES'
           });
@@ -590,31 +604,35 @@ describe('installer tests', () => {
         existsSyncMock.mockImplementation(
           (p: fs.PathLike) => path.resolve(String(p)) === base
         );
-        writeFileSyncMock.mockImplementation(() => {});
+        mkdtempSyncMock.mockImplementation(
+          (prefix: string) => `${prefix}abc123`
+        );
         rmSyncMock.mockImplementation(() => {});
 
         expect(installer.DotnetInstallDir.isDirectoryWritable(target)).toBe(
           true
         );
-        const probePath = String(writeFileSyncMock.mock.calls[0][0]);
-        expect(path.dirname(probePath)).toBe(base);
+        const probePrefix = String(mkdtempSyncMock.mock.calls[0][0]);
+        expect(path.dirname(probePrefix)).toBe(base);
       });
 
       it('returns false when no existing ancestor is found up to the filesystem root', () => {
         existsSyncMock.mockReturnValue(false);
-        writeFileSyncMock.mockImplementation(() => {});
+        mkdtempSyncMock.mockImplementation(
+          (prefix: string) => `${prefix}abc123`
+        );
         rmSyncMock.mockImplementation(() => {});
 
         const target = path.resolve('nonexistent', 'deep', 'path');
         expect(installer.DotnetInstallDir.isDirectoryWritable(target)).toBe(
           false
         );
-        expect(writeFileSyncMock).not.toHaveBeenCalled();
+        expect(mkdtempSyncMock).not.toHaveBeenCalled();
       });
 
-      it('cleans up the probe file even when the write fails', () => {
+      it('does not remove anything when the probe directory was not created', () => {
         existsSyncMock.mockReturnValue(true);
-        writeFileSyncMock.mockImplementation(() => {
+        mkdtempSyncMock.mockImplementation(() => {
           throw Object.assign(new Error('permission denied'), {
             code: 'EPERM'
           });
@@ -624,7 +642,7 @@ describe('installer tests', () => {
         installer.DotnetInstallDir.isDirectoryWritable(
           path.resolve('some', 'dir')
         );
-        expect(rmSyncMock).toHaveBeenCalled();
+        expect(rmSyncMock).not.toHaveBeenCalled();
       });
     });
 

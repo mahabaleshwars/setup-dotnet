@@ -456,9 +456,10 @@ export abstract class DotnetInstallDir {
   /**
    * Determines whether the current user can create/modify the given directory.
    *
-   * The nearest already-existing ancestor is probed with an actual file write
-   * because it is the only reliable way to detect permission problems across
-   * all platforms (notably Windows ACLs, which `fs.accessSync` does not honor).
+   * The nearest already-existing ancestor is probed by actually creating a
+   * directory because it is the only reliable way to detect permission problems
+   * across all platforms (notably Windows ACLs, which `fs.accessSync` does not
+   * honor).
    */
   public static isDirectoryWritable(dirPath: string): boolean {
     let current = path.resolve(dirPath);
@@ -474,20 +475,23 @@ export abstract class DotnetInstallDir {
       current = parent;
     }
 
-    const probe = path.join(
-      current,
-      `.setup-dotnet-write-test-${process.pid}-${Date.now()}`
-    );
+    // `mkdtempSync` creates a uniquely named directory exclusively, so a
+    // pre-planted symlink cannot be followed and only a path this process
+    // created is ever removed. It also proves subdirectories can be created,
+    // which the installer requires.
+    let probe: string | undefined;
     try {
-      fs.writeFileSync(probe, '');
+      probe = fs.mkdtempSync(path.join(current, '.setup-dotnet-write-test-'));
       return true;
     } catch {
       return false;
     } finally {
-      try {
-        fs.rmSync(probe, {force: true});
-      } catch {
-        // Best-effort cleanup; ignore failures.
+      if (probe) {
+        try {
+          fs.rmSync(probe, {recursive: true, force: true});
+        } catch {
+          // Best-effort cleanup; ignore failures.
+        }
       }
     }
   }

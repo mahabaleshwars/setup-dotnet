@@ -403,7 +403,7 @@ You can also set `DOTNET_INSTALL_DIR` to a value based on runtime variables, suc
 
 ### Automatic fallback when the default location isn't writable
 
-When `DOTNET_INSTALL_DIR` is **not** set and the default location for the runner OS isn't writable by the current user (common on self-hosted, larger, or containerized runners), the action installs .NET into a user-writable directory instead of failing. A warning annotation is logged whenever this happens, stating which location was used and why.
+When `DOTNET_INSTALL_DIR` is **not** set and the default location for the runner OS isn't writable by the current user (common on self-hosted, larger, or containerized runners), the action installs .NET into the first writable fallback directory instead of failing immediately. A warning annotation is logged whenever this happens, stating which location was used and why. If none of the candidates are writable, the action warns that the installation is likely to fail and proceeds with the default fallback.
 
 The resolution order is:
 
