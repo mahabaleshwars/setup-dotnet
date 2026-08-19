@@ -24,7 +24,7 @@ for .NET SDK versions that are currently available.
 - Upgraded action from node20 to node24
   > Make sure your runner is on version v2.327.1 or later to ensure compatibility with this release. see [Release Notes](https://github.com/actions/runner/releases/tag/v2.327.1)
 
-For more details, see the full release notes on the [release page](https://github.com/actions/setup-dotnet/releases/tag/v5.0.0)
+For more details, see the full release notes on the [release page](https://github.com/actions/setup-dotnet/releases)
 
 ## Usage
 
@@ -105,7 +105,7 @@ steps:
 
 ## Using the `dotnet-quality` input
 
-The `dotnet-quality` input installs the latest build of the specified quality in the channel. Supported values: `daily`, `preview`, `ga`.
+The `dotnet-quality` input installs the latest build of the specified quality in the channel. Supported values: `daily`, `preview`, `ga`. For more details about quality options, see the [official .NET documentation](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-install-script#options).
 
 > **Note**: When used with a specific SDK version, `dotnet-quality` supports only `A.B`, `A.B.x`, `A`, `A.x`, and `A.B.Cxx` formats where the major version is higher than 5. For all other formats, `dotnet-quality` will be ignored.
 
@@ -147,6 +147,8 @@ steps:
 ```
 
 > **Note**: The action supports `latest*` variants of the [rollForward](https://learn.microsoft.com/en-us/dotnet/core/tools/global-json#rollforward) field in `global.json`. When set to `latestPatch`, `latestFeature`, `latestMinor`, or `latestMajor`, the action installs the appropriate SDK version. For prerelease versions, the exact pinned version is always installed regardless of the `rollForward` setting.
+
+> **Important**: When using `rollForward` in `global.json`, the `sdk.version` field must be a fully-qualified SDK version (e.g., `8.0.100`, `10.0.100`). Wildcard versions (e.g., `10.0.*`) and runtime-style versions (e.g., `8.0.0`) are not supported. See the [.NET SDK version specification](https://learn.microsoft.com/en-us/dotnet/core/tools/global-json#version) for details.
 
 ## Caching NuGet Packages
 The action has a built-in functionality for caching and restoring dependencies. It uses [toolkit/cache](https://github.com/actions/toolkit/tree/main/packages/cache) under the hood for caching global packages data but requires less configuration settings. The `cache` input is optional, and caching is turned off by default.
