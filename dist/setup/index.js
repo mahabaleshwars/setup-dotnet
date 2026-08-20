@@ -45320,8 +45320,7 @@ class DotnetInstallScript {
 class DotnetInstallDir {
     static default = {
         linux: '/usr/share/dotnet',
-        // Lazy: os.homedir() throws for containers run with a UID that has no
-        // passwd entry and no HOME, which must not happen while the module loads.
+        // Lazy: os.homedir() throws for a UID with no passwd entry and no HOME.
         get mac() {
             return DotnetInstallDir.homeDirPath();
         },
@@ -45345,12 +45344,7 @@ class DotnetInstallDir {
             return undefined;
         }
     }
-    /**
-     * `RUNNER_TEMP` is private to the job, but the OS temp directory is shared: a
-     * predictable child of it could be pre-created by another user and seeded with
-     * a `dotnet` executable that `--skip-non-versioned-files` keeps and that would
-     * then land on `PATH`. A uniquely named directory is created there instead.
-     */
+    /** A unique directory keeps another user from pre-seeding a predictable one in the shared OS temp directory. */
     static tempDirPath() {
         const runnerTemp = process.env['RUNNER_TEMP'];
         if (runnerTemp)
@@ -45362,14 +45356,7 @@ class DotnetInstallDir {
             return undefined;
         }
     }
-    /**
-     * Resolves the install directory: an explicit `DOTNET_INSTALL_DIR`, then the
-     * default OS location, then `$HOME/.dotnet`, then a temp directory. Candidates
-     * are resolved one at a time because determining them can fail or, for the
-     * temp directory, create it.
-     *
-     * The parameters exist only to make the resolution testable in isolation.
-     */
+    /** Candidates are resolved one at a time because determining them can fail or, for the temp directory, create it. */
     static resolveDirPath(defaultPath, fallbackPath, tempFallbackPath) {
         // An explicit override is honored without a writability check.
         if (process.env['DOTNET_INSTALL_DIR']) {
@@ -45387,8 +45374,7 @@ class DotnetInstallDir {
             if (!candidate || alreadyProbed)
                 continue;
             if (DotnetInstallDir.isDirectoryWritable(candidate)) {
-                // Anything but the default moves DOTNET_ROOT and hides the .NET
-                // preinstalled there, so the change has to be reported.
+                // Any other root moves DOTNET_ROOT and hides the .NET preinstalled there.
                 if (index > 0) {
                     warning(`${DotnetInstallDir.describeUnusable(unusable)} Falling back to '${candidate}'. Set the 'DOTNET_INSTALL_DIR' environment variable to override this location.`);
                 }
@@ -45411,12 +45397,7 @@ class DotnetInstallDir {
             ? `The .NET install directory ${paths} is not writable by the current user.`
             : `The .NET install directories ${paths} are not writable by the current user.`;
     }
-    /**
-     * Probes the nearest existing ancestor by creating a directory: `accessSync`
-     * does not honor Windows ACLs, while `mkdtemp` cannot follow a planted
-     * symlink, only ever removes what it created, and proves that the
-     * subdirectories the installer needs can be created.
-     */
+    /** `accessSync` does not honor Windows ACLs, and unlike a file write `mkdtemp` cannot follow a planted symlink, only removes what it created, and proves subdirectories can be created. */
     static isDirectoryWritable(dirPath) {
         let current = external_path_default().resolve(dirPath);
         // The install script may need to create the leaf directory itself.

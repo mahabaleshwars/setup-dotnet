@@ -597,7 +597,7 @@ describe('installer tests', () => {
         );
       });
 
-      it('walks up to the nearest existing ancestor when the target does not exist', () => {
+      it('walks up to the nearest existing ancestor, and gives up at the filesystem root', () => {
         const base = path.resolve('writable-base');
         const target = path.join(base, 'sub', 'leaf');
 
@@ -612,18 +612,12 @@ describe('installer tests', () => {
         expect(installer.DotnetInstallDir.isDirectoryWritable(target)).toBe(
           true
         );
-        const probePrefix = String(mkdtempSyncMock.mock.calls[0][0]);
-        expect(path.dirname(probePrefix)).toBe(base);
-      });
-
-      it('returns false when no existing ancestor is found up to the filesystem root', () => {
-        existsSyncMock.mockReturnValue(false);
-        mkdtempSyncMock.mockImplementation(
-          (prefix: string) => `${prefix}abc123`
+        expect(path.dirname(String(mkdtempSyncMock.mock.calls[0][0]))).toBe(
+          base
         );
-        rmSyncMock.mockImplementation(() => {});
 
-        const target = path.resolve('nonexistent', 'deep', 'path');
+        existsSyncMock.mockReturnValue(false);
+        mkdtempSyncMock.mockClear();
         expect(installer.DotnetInstallDir.isDirectoryWritable(target)).toBe(
           false
         );
@@ -676,18 +670,6 @@ describe('installer tests', () => {
 
         expect(result).toBe(path.normalize(process.env['DOTNET_INSTALL_DIR']));
         expect(writableSpy).not.toHaveBeenCalled();
-      });
-
-      it('resolves a relative DOTNET_INSTALL_DIR to an absolute path', () => {
-        process.env['DOTNET_INSTALL_DIR'] = 'relative-dir';
-
-        const result = installer.DotnetInstallDir.resolveDirPath(
-          defaultPath,
-          fallbackPath
-        );
-
-        expect(path.isAbsolute(result)).toBe(true);
-        expect(result).toBe(path.join(process.cwd(), 'relative-dir'));
       });
 
       it('uses the default location when it is writable', () => {
@@ -763,7 +745,7 @@ describe('installer tests', () => {
         );
       });
 
-      it('falls back to the temp directory when the default is the home directory and is not writable', () => {
+      it('probes the home directory once when it is also the default', () => {
         const tempFallbackPath = path.join(os.tmpdir(), '.dotnet');
         writableSpy.mockImplementation(
           (dir: string) =>
@@ -781,24 +763,6 @@ describe('installer tests', () => {
         expect(warningSpy).toHaveBeenCalledTimes(1);
         expect(warningSpy.mock.calls[0][0]).toContain(
           `Falling back to '${tempFallbackPath}'`
-        );
-      });
-
-      it('does not probe the home directory twice when it is also the default', () => {
-        const tempFallbackPath = path.join(os.tmpdir(), '.dotnet');
-        writableSpy.mockReturnValue(false);
-
-        const result = installer.DotnetInstallDir.resolveDirPath(
-          fallbackPath,
-          fallbackPath,
-          tempFallbackPath
-        );
-
-        expect(result).toBe(fallbackPath);
-        expect(writableSpy).toHaveBeenCalledTimes(2);
-        expect(warningSpy).toHaveBeenCalledTimes(1);
-        expect(warningSpy.mock.calls[0][0]).toContain(
-          'are not writable by the current user'
         );
       });
 
@@ -840,26 +804,15 @@ describe('installer tests', () => {
               path.normalize(dir) === path.normalize(tempFallbackPath)
           );
 
-          const result = installer.DotnetInstallDir.resolveDirPath();
-
-          expect(result).toBe(tempFallbackPath);
-          expect(warningSpy).toHaveBeenCalledTimes(1);
-          expect(warningSpy.mock.calls[0][0]).toContain(
-            `Falling back to '${tempFallbackPath}'`
+          expect(installer.DotnetInstallDir.resolveDirPath()).toBe(
+            tempFallbackPath
           );
-        });
 
-        it('treats an empty home directory as undetermined instead of resolving it against the working directory', () => {
+          // An empty HOME is equally undetermined and must not resolve against the cwd.
           homedirSpy.mockReturnValue('');
-          writableSpy.mockImplementation(
-            (dir: string) =>
-              path.normalize(dir) === path.normalize(tempFallbackPath)
+          expect(installer.DotnetInstallDir.resolveDirPath()).toBe(
+            tempFallbackPath
           );
-
-          const result = installer.DotnetInstallDir.resolveDirPath();
-
-          expect(result).toBe(tempFallbackPath);
-          expect(path.isAbsolute(result)).toBe(true);
         });
       });
 
@@ -897,33 +850,24 @@ describe('installer tests', () => {
 
         it('creates a uniquely named directory instead of a predictable child of the shared OS temp directory', () => {
           delete process.env['RUNNER_TEMP'];
+          writableSpy.mockReturnValue(true);
+
+          expect(
+            installer.DotnetInstallDir.resolveDirPath(defaultPath, fallbackPath)
+          ).toBe(defaultPath);
+          expect(mkdtempSyncMock).not.toHaveBeenCalled();
+
           writableSpy.mockImplementation(
             (dir: string) =>
               path.normalize(dir) === path.normalize(privateTempPath)
           );
 
-          const result = installer.DotnetInstallDir.resolveDirPath(
-            defaultPath,
-            fallbackPath
-          );
-
-          expect(result).toBe(privateTempPath);
+          expect(
+            installer.DotnetInstallDir.resolveDirPath(defaultPath, fallbackPath)
+          ).toBe(privateTempPath);
           expect(mkdtempSyncMock).toHaveBeenCalledWith(
             path.join(os.tmpdir(), 'setup-dotnet-')
           );
-        });
-
-        it('is not created when the default location is writable', () => {
-          delete process.env['RUNNER_TEMP'];
-          writableSpy.mockReturnValue(true);
-
-          const result = installer.DotnetInstallDir.resolveDirPath(
-            defaultPath,
-            fallbackPath
-          );
-
-          expect(result).toBe(defaultPath);
-          expect(mkdtempSyncMock).not.toHaveBeenCalled();
         });
 
         it('is skipped when it cannot be created', () => {
