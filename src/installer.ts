@@ -334,6 +334,16 @@ export class DotnetInstallScript {
 }
 
 export abstract class DotnetInstallDir {
+  private static readonly default = {
+    linux: '/usr/share/dotnet',
+    // Lazy: os.homedir() throws for containers run with a UID that has no
+    // passwd entry and no HOME, which must not happen while the module loads.
+    get mac() {
+      return DotnetInstallDir.homeDirPath();
+    },
+    windows: path.join(process.env['PROGRAMFILES'] + '', 'dotnet')
+  };
+
   private static resolvedDirPath: string | undefined;
 
   public static get dirPath(): string {
@@ -343,10 +353,7 @@ export abstract class DotnetInstallDir {
     return DotnetInstallDir.resolvedDirPath;
   }
 
-  /**
-   * `undefined` when the home directory cannot be determined: `os.homedir()`
-   * throws for containers run with a UID that has no passwd entry and no `HOME`.
-   */
+  /** `undefined` when the home directory cannot be determined. */
   private static homeDirPath(): string | undefined {
     try {
       const home = os.homedir();
@@ -354,17 +361,6 @@ export abstract class DotnetInstallDir {
       return path.isAbsolute(home) ? path.join(home, '.dotnet') : undefined;
     } catch {
       return undefined;
-    }
-  }
-
-  private static defaultDirPath(): string | undefined {
-    switch (PLATFORM) {
-      case 'linux':
-        return '/usr/share/dotnet';
-      case 'windows':
-        return path.join(process.env['PROGRAMFILES'] + '', 'dotnet');
-      case 'mac':
-        return DotnetInstallDir.homeDirPath();
     }
   }
 
@@ -376,9 +372,7 @@ export abstract class DotnetInstallDir {
    */
   private static tempDirPath(): string | undefined {
     const runnerTemp = process.env['RUNNER_TEMP'];
-    if (runnerTemp) {
-      return path.join(runnerTemp, '.dotnet');
-    }
+    if (runnerTemp) return path.join(runnerTemp, '.dotnet');
 
     try {
       return mkdtempSync(path.join(os.tmpdir(), 'setup-dotnet-'));
@@ -389,8 +383,9 @@ export abstract class DotnetInstallDir {
 
   /**
    * Resolves the install directory: an explicit `DOTNET_INSTALL_DIR`, then the
-   * default OS location, then `$HOME/.dotnet`, then a temp directory - skipping
-   * candidates that are undeterminable, duplicated or not writable.
+   * default OS location, then `$HOME/.dotnet`, then a temp directory. Candidates
+   * are resolved one at a time because determining them can fail or, for the
+   * temp directory, create it.
    *
    * The parameters exist only to make the resolution testable in isolation.
    */
@@ -406,68 +401,52 @@ export abstract class DotnetInstallDir {
       );
     }
 
-    // Resolved only here: looking up the home directory can fail, which must
-    // neither happen while the module loads nor block the override above.
-    const defaultDir = defaultPath ?? DotnetInstallDir.defaultDirPath();
-    const homeDir = fallbackPath ?? DotnetInstallDir.homeDirPath();
+    const candidates = [
+      () => defaultPath ?? DotnetInstallDir.default[PLATFORM],
+      () => fallbackPath ?? DotnetInstallDir.homeDirPath(),
+      () => tempFallbackPath ?? DotnetInstallDir.tempDirPath()
+    ];
+    const unusable: string[] = [];
 
-    const samePath = (first?: string, second?: string) =>
-      first !== undefined &&
-      second !== undefined &&
-      path.normalize(first) === path.normalize(second);
+    for (let index = 0; index < candidates.length; index++) {
+      const candidate = candidates[index]();
+      const alreadyProbed = unusable.some(
+        other => path.normalize(other) === path.normalize(candidate ?? '')
+      );
+      if (!candidate || alreadyProbed) continue;
 
-    const rejected: string[] = [];
-
-    // Any other root moves DOTNET_ROOT and hides the .NET preinstalled there.
-    if (defaultDir) {
-      if (DotnetInstallDir.isDirectoryWritable(defaultDir)) {
-        return defaultDir;
+      if (DotnetInstallDir.isDirectoryWritable(candidate)) {
+        // Anything but the default moves DOTNET_ROOT and hides the .NET
+        // preinstalled there, so the change has to be reported.
+        if (index > 0) {
+          core.warning(
+            `${DotnetInstallDir.describeUnusable(unusable)} Falling back to '${candidate}'. Set the 'DOTNET_INSTALL_DIR' environment variable to override this location.`
+          );
+        }
+        return candidate;
       }
-      rejected.push(defaultDir);
+      unusable.push(candidate);
     }
 
-    if (homeDir && !samePath(homeDir, defaultDir)) {
-      if (DotnetInstallDir.isDirectoryWritable(homeDir)) {
-        core.warning(
-          `${DotnetInstallDir.describeRejected(rejected)} Falling back to '${homeDir}'. Set the 'DOTNET_INSTALL_DIR' environment variable to override this location.`
-        );
-        return homeDir;
-      }
-      rejected.push(homeDir);
-    }
-
-    // Resolved only now because the directory may have to be created.
-    const tempDir = tempFallbackPath ?? DotnetInstallDir.tempDirPath();
-    if (tempDir && !rejected.some(candidate => samePath(candidate, tempDir))) {
-      if (DotnetInstallDir.isDirectoryWritable(tempDir)) {
-        core.warning(
-          `${DotnetInstallDir.describeRejected(rejected)} Falling back to '${tempDir}'. Set the 'DOTNET_INSTALL_DIR' environment variable to override this location.`
-        );
-        return tempDir;
-      }
-      rejected.push(tempDir);
-    }
-
-    const bestEffort = homeDir ?? defaultDir ?? tempDir;
-    if (!bestEffort) {
+    if (!unusable.length) {
       throw new Error(
         `Unable to determine a directory to install .NET into. Set the 'DOTNET_INSTALL_DIR' environment variable to a writable location.`
       );
     }
 
     core.warning(
-      `${DotnetInstallDir.describeRejected(rejected)} Falling back to '${bestEffort}' anyway, but the installation is likely to fail. Set the 'DOTNET_INSTALL_DIR' environment variable to a writable location.`
+      `${DotnetInstallDir.describeUnusable(unusable)} Keeping '${unusable[0]}', but the installation is likely to fail. Set the 'DOTNET_INSTALL_DIR' environment variable to a writable location.`
     );
-    return bestEffort;
+    return unusable[0];
   }
 
-  private static describeRejected(rejected: string[]): string {
-    if (!rejected.length) {
+  private static describeUnusable(unusable: string[]): string {
+    if (!unusable.length) {
       return 'The home directory of the current user could not be determined.';
     }
 
-    const paths = rejected.map(candidate => `'${candidate}'`).join(', ');
-    return rejected.length === 1
+    const paths = unusable.map(candidate => `'${candidate}'`).join(', ');
+    return unusable.length === 1
       ? `The .NET install directory ${paths} is not writable by the current user.`
       : `The .NET install directories ${paths} are not writable by the current user.`;
   }

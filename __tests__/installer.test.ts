@@ -743,7 +743,7 @@ describe('installer tests', () => {
         );
       });
 
-      it('returns the home fallback as a best effort when nothing is writable', () => {
+      it('keeps the default location when nothing is writable', () => {
         const tempFallbackPath = path.join(os.tmpdir(), '.dotnet');
         writableSpy.mockReturnValue(false);
 
@@ -753,7 +753,7 @@ describe('installer tests', () => {
           tempFallbackPath
         );
 
-        expect(result).toBe(fallbackPath);
+        expect(result).toBe(defaultPath);
         expect(warningSpy).toHaveBeenCalledTimes(1);
         expect(warningSpy.mock.calls[0][0]).toContain(
           'are not writable by the current user'
@@ -940,7 +940,7 @@ describe('installer tests', () => {
             fallbackPath
           );
 
-          expect(result).toBe(fallbackPath);
+          expect(result).toBe(defaultPath);
           expect(writableSpy).toHaveBeenCalledTimes(2);
           expect(warningSpy.mock.calls[0][0]).toContain(
             'the installation is likely to fail'
