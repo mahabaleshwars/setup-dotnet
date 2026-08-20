@@ -3,7 +3,7 @@ import * as core from '@actions/core';
 import * as exec from '@actions/exec';
 import * as io from '@actions/io';
 import * as hc from '@actions/http-client';
-import * as fs from 'fs';
+import {chmodSync, existsSync, mkdtempSync, rmSync} from 'fs';
 import path from 'path';
 import {fileURLToPath} from 'url';
 import os from 'os';
@@ -274,7 +274,7 @@ export class DotnetInstallScript {
   }
 
   private setupScriptBash() {
-    fs.chmodSync(this.escapedScript, '777');
+    chmodSync(this.escapedScript, '777');
   }
 
   private async getScriptPath() {
@@ -344,10 +344,8 @@ export abstract class DotnetInstallDir {
   }
 
   /**
-   * `$HOME/.dotnet`: the default location on macOS and the user-writable
-   * fallback elsewhere. Returns `undefined` when the home directory cannot be
-   * determined - `os.homedir()` throws for containers started with an
-   * arbitrary UID that has no passwd entry and no `HOME` set.
+   * `undefined` when the home directory cannot be determined: `os.homedir()`
+   * throws for containers run with a UID that has no passwd entry and no `HOME`.
    */
   private static homeDirPath(): string | undefined {
     try {
@@ -371,12 +369,10 @@ export abstract class DotnetInstallDir {
   }
 
   /**
-   * Last-resort fallback used when neither the default OS location nor the
-   * home directory are writable. `RUNNER_TEMP` is private to the job, while the
-   * OS temp directory is shared: a predictable child of it could be pre-created
-   * by another user and populated with a `dotnet` executable that the install
-   * scripts keep (they run with `--skip-non-versioned-files`) and that would
-   * then end up on `PATH`. A uniquely named directory is created there instead.
+   * `RUNNER_TEMP` is private to the job, but the OS temp directory is shared: a
+   * predictable child of it could be pre-created by another user and seeded with
+   * a `dotnet` executable that `--skip-non-versioned-files` keeps and that would
+   * then land on `PATH`. A uniquely named directory is created there instead.
    */
   private static tempDirPath(): string | undefined {
     const runnerTemp = process.env['RUNNER_TEMP'];
@@ -385,36 +381,25 @@ export abstract class DotnetInstallDir {
     }
 
     try {
-      return fs.mkdtempSync(path.join(os.tmpdir(), 'setup-dotnet-'));
+      return mkdtempSync(path.join(os.tmpdir(), 'setup-dotnet-'));
     } catch {
       return undefined;
     }
   }
 
   /**
-   * Resolves the directory where .NET should be installed following the
-   * priority order:
-   *   1. An explicit `DOTNET_INSTALL_DIR` environment variable (always honored).
-   *   2. The default OS location, when it is writable by the current user.
-   *   3. A user-writable fallback (`$HOME/.dotnet`) when the default location
-   *      cannot be written to.
-   *   4. A last-resort temp fallback (`$RUNNER_TEMP/.dotnet`, or a private
-   *      directory created in the OS temp directory) when the home fallback is
-   *      also not writable.
+   * Resolves the install directory: an explicit `DOTNET_INSTALL_DIR`, then the
+   * default OS location, then `$HOME/.dotnet`, then a temp directory - skipping
+   * candidates that are undeterminable, duplicated or not writable.
    *
-   * Candidates that resolve to the same directory are only probed once (on
-   * macOS the default location and the home fallback coincide), and candidates
-   * that cannot be determined at all are skipped.
-   *
-   * The parameters are only used to make the resolution logic testable in
-   * isolation; production code relies on the platform defaults.
+   * The parameters exist only to make the resolution testable in isolation.
    */
   public static resolveDirPath(
     defaultPath?: string,
     fallbackPath?: string,
     tempFallbackPath?: string
   ): string {
-    // 1. An explicit override always wins and is never second-guessed.
+    // An explicit override is honored without a writability check.
     if (process.env['DOTNET_INSTALL_DIR']) {
       return DotnetInstallDir.convertInstallPathToAbsolute(
         process.env['DOTNET_INSTALL_DIR']
@@ -433,10 +418,7 @@ export abstract class DotnetInstallDir {
 
     const rejected: string[] = [];
 
-    // 2. Prefer the default OS location when the user can write to it, which
-    // keeps the .NET pre-installed in the runner image reusable. Falling back
-    // to another root gives up that cache, so it is only done when the default
-    // location is not writable.
+    // Any other root moves DOTNET_ROOT and hides the .NET preinstalled there.
     if (defaultDir) {
       if (DotnetInstallDir.isDirectoryWritable(defaultDir)) {
         return defaultDir;
@@ -444,8 +426,6 @@ export abstract class DotnetInstallDir {
       rejected.push(defaultDir);
     }
 
-    // 3. Fall back to the user's home directory when it is writable. This also
-    // moves DOTNET_ROOT, hiding any .NET preinstalled in the default location.
     if (homeDir && !samePath(homeDir, defaultDir)) {
       if (DotnetInstallDir.isDirectoryWritable(homeDir)) {
         core.warning(
@@ -456,9 +436,7 @@ export abstract class DotnetInstallDir {
       rejected.push(homeDir);
     }
 
-    // 4. Last resort: use a temporary directory when it is distinct from the
-    // already rejected candidates and writable. Resolved only now because it
-    // may have to be created.
+    // Resolved only now because the directory may have to be created.
     const tempDir = tempFallbackPath ?? DotnetInstallDir.tempDirPath();
     if (tempDir && !rejected.some(candidate => samePath(candidate, tempDir))) {
       if (DotnetInstallDir.isDirectoryWritable(tempDir)) {
@@ -470,12 +448,10 @@ export abstract class DotnetInstallDir {
       rejected.push(tempDir);
     }
 
-    // 5. Nothing is writable. Return the best remaining candidate and surface a
-    // warning so the failure is diagnosable.
     const bestEffort = homeDir ?? defaultDir ?? tempDir;
     if (!bestEffort) {
       throw new Error(
-        `Unable to determine a directory to install .NET into: the home directory of the current user could not be determined and no temporary directory could be created. Set the 'DOTNET_INSTALL_DIR' environment variable to a writable location.`
+        `Unable to determine a directory to install .NET into. Set the 'DOTNET_INSTALL_DIR' environment variable to a writable location.`
       );
     }
 
@@ -497,41 +473,33 @@ export abstract class DotnetInstallDir {
   }
 
   /**
-   * Determines whether the current user can create/modify the given directory.
-   *
-   * The nearest already-existing ancestor is probed by actually creating a
-   * directory because it is the only reliable way to detect permission problems
-   * across all platforms (notably Windows ACLs, which `fs.accessSync` does not
-   * honor).
+   * Probes the nearest existing ancestor by creating a directory: `accessSync`
+   * does not honor Windows ACLs, while `mkdtemp` cannot follow a planted
+   * symlink, only ever removes what it created, and proves that the
+   * subdirectories the installer needs can be created.
    */
   public static isDirectoryWritable(dirPath: string): boolean {
     let current = path.resolve(dirPath);
 
-    // Walk up to the nearest existing ancestor; the install script may need to
-    // create the leaf directory itself.
-    while (!fs.existsSync(current)) {
+    // The install script may need to create the leaf directory itself.
+    while (!existsSync(current)) {
       const parent = path.dirname(current);
       if (parent === current) {
-        // Reached the filesystem root without finding an existing directory.
         return false;
       }
       current = parent;
     }
 
-    // `mkdtempSync` creates a uniquely named directory exclusively, so a
-    // pre-planted symlink cannot be followed and only a path this process
-    // created is ever removed. It also proves subdirectories can be created,
-    // which the installer requires.
     let probe: string | undefined;
     try {
-      probe = fs.mkdtempSync(path.join(current, '.setup-dotnet-write-test-'));
+      probe = mkdtempSync(path.join(current, '.setup-dotnet-write-test-'));
       return true;
     } catch {
       return false;
     } finally {
       if (probe) {
         try {
-          fs.rmSync(probe, {recursive: true, force: true});
+          rmSync(probe, {recursive: true, force: true});
         } catch {
           // Best-effort cleanup; ignore failures.
         }
