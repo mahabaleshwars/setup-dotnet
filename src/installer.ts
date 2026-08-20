@@ -499,10 +499,6 @@ export function normalizeArch(arch: string): string {
 }
 
 export class DotnetCoreInstaller {
-  static {
-    DotnetInstallDir.setEnvironmentVariable();
-  }
-
   constructor(
     private version: string,
     private quality: QualityOptions,
@@ -511,6 +507,9 @@ export class DotnetCoreInstaller {
   ) {}
 
   public async installDotnet(): Promise<string | null> {
+    // Not at import: a run that installs nothing must not touch the filesystem.
+    DotnetInstallDir.setEnvironmentVariable();
+
     const versionResolver = new DotnetVersionResolver(
       this.version,
       this.quality,

@@ -45458,9 +45458,6 @@ class DotnetCoreInstaller {
     quality;
     architecture;
     dotnetChannel;
-    static {
-        DotnetInstallDir.setEnvironmentVariable();
-    }
     constructor(version, quality, architecture, dotnetChannel) {
         this.version = version;
         this.quality = quality;
@@ -45468,6 +45465,8 @@ class DotnetCoreInstaller {
         this.dotnetChannel = dotnetChannel;
     }
     async installDotnet() {
+        // Not at import: a run that installs nothing must not touch the filesystem.
+        DotnetInstallDir.setEnvironmentVariable();
         const versionResolver = new DotnetVersionResolver(this.version, this.quality, this.dotnetChannel);
         const dotnetVersion = await versionResolver.createDotnetVersion();
         const architectureArguments = this.architecture &&
