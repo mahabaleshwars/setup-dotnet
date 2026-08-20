@@ -803,13 +803,12 @@ describe('installer tests', () => {
       });
 
       describe('when the home directory cannot be determined', () => {
-        const tempFallbackPath = path.join(
-          process.env['RUNNER_TEMP'] || os.tmpdir(),
-          '.dotnet'
-        );
+        const runnerTempPath = path.resolve('runner', 'temp');
+        const tempFallbackPath = path.join(runnerTempPath, '.dotnet');
         let homedirSpy: jest.SpiedFunction<typeof os.homedir>;
 
         beforeEach(() => {
+          process.env['RUNNER_TEMP'] = runnerTempPath;
           homedirSpy = jest.spyOn(os, 'homedir').mockImplementation(() => {
             throw Object.assign(
               new Error(
@@ -847,6 +846,91 @@ describe('installer tests', () => {
           expect(warningSpy).toHaveBeenCalledTimes(1);
           expect(warningSpy.mock.calls[0][0]).toContain(
             `Falling back to '${tempFallbackPath}'`
+          );
+        });
+      });
+
+      describe('temp fallback location', () => {
+        const mkdtempSyncMock = fs.mkdtempSync as jest.Mock;
+        const privateTempPath = path.join(os.tmpdir(), 'setup-dotnet-abc123');
+
+        beforeEach(() => {
+          mkdtempSyncMock.mockClear();
+          mkdtempSyncMock.mockReturnValue(privateTempPath);
+        });
+
+        afterEach(() => {
+          mkdtempSyncMock.mockImplementation(
+            jest.requireActual<typeof import('fs')>('fs').mkdtempSync
+          );
+        });
+
+        it('uses the job-private RUNNER_TEMP directory when it is available', () => {
+          const runnerTempPath = path.resolve('runner', 'temp');
+          process.env['RUNNER_TEMP'] = runnerTempPath;
+          const expected = path.join(runnerTempPath, '.dotnet');
+          writableSpy.mockImplementation(
+            (dir: string) => path.normalize(dir) === path.normalize(expected)
+          );
+
+          const result = installer.DotnetInstallDir.resolveDirPath(
+            defaultPath,
+            fallbackPath
+          );
+
+          expect(result).toBe(expected);
+          expect(mkdtempSyncMock).not.toHaveBeenCalled();
+        });
+
+        it('creates a uniquely named directory instead of a predictable child of the shared OS temp directory', () => {
+          delete process.env['RUNNER_TEMP'];
+          writableSpy.mockImplementation(
+            (dir: string) =>
+              path.normalize(dir) === path.normalize(privateTempPath)
+          );
+
+          const result = installer.DotnetInstallDir.resolveDirPath(
+            defaultPath,
+            fallbackPath
+          );
+
+          expect(result).toBe(privateTempPath);
+          expect(mkdtempSyncMock).toHaveBeenCalledWith(
+            path.join(os.tmpdir(), 'setup-dotnet-')
+          );
+        });
+
+        it('is not created when the default location is writable', () => {
+          delete process.env['RUNNER_TEMP'];
+          writableSpy.mockReturnValue(true);
+
+          const result = installer.DotnetInstallDir.resolveDirPath(
+            defaultPath,
+            fallbackPath
+          );
+
+          expect(result).toBe(defaultPath);
+          expect(mkdtempSyncMock).not.toHaveBeenCalled();
+        });
+
+        it('is skipped when it cannot be created', () => {
+          delete process.env['RUNNER_TEMP'];
+          mkdtempSyncMock.mockImplementation(() => {
+            throw Object.assign(new Error('permission denied'), {
+              code: 'EACCES'
+            });
+          });
+          writableSpy.mockReturnValue(false);
+
+          const result = installer.DotnetInstallDir.resolveDirPath(
+            defaultPath,
+            fallbackPath
+          );
+
+          expect(result).toBe(fallbackPath);
+          expect(writableSpy).toHaveBeenCalledTimes(2);
+          expect(warningSpy.mock.calls[0][0]).toContain(
+            'the installation is likely to fail'
           );
         });
       });

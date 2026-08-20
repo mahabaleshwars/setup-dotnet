@@ -334,16 +334,6 @@ export class DotnetInstallScript {
 }
 
 export abstract class DotnetInstallDir {
-  /**
-   * Last-resort fallback used when neither the default OS location nor the
-   * home directory (`$HOME/.dotnet`) are writable. Prefers the runner's
-   * temporary directory (`RUNNER_TEMP`) and otherwise the OS temp directory.
-   */
-  private static readonly tempFallback = path.join(
-    process.env['RUNNER_TEMP'] || os.tmpdir(),
-    '.dotnet'
-  );
-
   private static resolvedDirPath: string | undefined;
 
   public static get dirPath(): string {
@@ -379,14 +369,36 @@ export abstract class DotnetInstallDir {
   }
 
   /**
+   * Last-resort fallback used when neither the default OS location nor the
+   * home directory are writable. `RUNNER_TEMP` is private to the job, while the
+   * OS temp directory is shared: a predictable child of it could be pre-created
+   * by another user and populated with a `dotnet` executable that the install
+   * scripts keep (they run with `--skip-non-versioned-files`) and that would
+   * then end up on `PATH`. A uniquely named directory is created there instead.
+   */
+  private static tempDirPath(): string | undefined {
+    const runnerTemp = process.env['RUNNER_TEMP'];
+    if (runnerTemp) {
+      return path.join(runnerTemp, '.dotnet');
+    }
+
+    try {
+      return fs.mkdtempSync(path.join(os.tmpdir(), 'setup-dotnet-'));
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
    * Resolves the directory where .NET should be installed following the
    * priority order:
    *   1. An explicit `DOTNET_INSTALL_DIR` environment variable (always honored).
    *   2. The default OS location, when it is writable by the current user.
    *   3. A user-writable fallback (`$HOME/.dotnet`) when the default location
    *      cannot be written to.
-   *   4. A last-resort temp fallback (`$RUNNER_TEMP/.dotnet` or the OS temp
-   *      directory) when the home fallback is also not writable.
+   *   4. A last-resort temp fallback (`$RUNNER_TEMP/.dotnet`, or a private
+   *      directory created in the OS temp directory) when the home fallback is
+   *      also not writable.
    *
    * Candidates that resolve to the same directory are only probed once (on
    * macOS the default location and the home fallback coincide), and candidates
@@ -411,7 +423,6 @@ export abstract class DotnetInstallDir {
     // neither happen while the module loads nor block the override above.
     const defaultDir = defaultPath ?? DotnetInstallDir.defaultDirPath();
     const homeDir = fallbackPath ?? DotnetInstallDir.homeDirPath();
-    const tempDir = tempFallbackPath ?? DotnetInstallDir.tempFallback;
 
     const samePath = (first?: string, second?: string) =>
       first !== undefined &&
@@ -420,8 +431,10 @@ export abstract class DotnetInstallDir {
 
     const rejected: string[] = [];
 
-    // 2. Prefer the default OS location when the user can write to it. This
-    // preserves the pre-installed .NET cache on GitHub-hosted runners.
+    // 2. Prefer the default OS location when the user can write to it, which
+    // keeps the .NET pre-installed in the runner image reusable. Falling back
+    // to another root gives up that cache, so it is only done when the default
+    // location is not writable.
     if (defaultDir) {
       if (DotnetInstallDir.isDirectoryWritable(defaultDir)) {
         return defaultDir;
@@ -443,8 +456,10 @@ export abstract class DotnetInstallDir {
     }
 
     // 4. Last resort: use a temporary directory when it is distinct from the
-    // already rejected candidates and writable.
-    if (!rejected.some(candidate => samePath(candidate, tempDir))) {
+    // already rejected candidates and writable. Resolved only now because it
+    // may have to be created.
+    const tempDir = tempFallbackPath ?? DotnetInstallDir.tempDirPath();
+    if (tempDir && !rejected.some(candidate => samePath(candidate, tempDir))) {
       if (DotnetInstallDir.isDirectoryWritable(tempDir)) {
         core.warning(
           `${DotnetInstallDir.describeRejected(rejected)} Falling back to '${tempDir}'. Set the 'DOTNET_INSTALL_DIR' environment variable to override this location.`
@@ -454,9 +469,15 @@ export abstract class DotnetInstallDir {
       rejected.push(tempDir);
     }
 
-    // 5. Nothing is writable. Return the home fallback as a best effort and
-    // surface a warning so the failure is diagnosable.
-    const bestEffort = homeDir ?? tempDir;
+    // 5. Nothing is writable. Return the best remaining candidate and surface a
+    // warning so the failure is diagnosable.
+    const bestEffort = homeDir ?? defaultDir ?? tempDir;
+    if (!bestEffort) {
+      throw new Error(
+        `Unable to determine a directory to install .NET into: the home directory of the current user could not be determined and no temporary directory could be created. Set the 'DOTNET_INSTALL_DIR' environment variable to a writable location.`
+      );
+    }
+
     core.warning(
       `${DotnetInstallDir.describeRejected(rejected)} Falling back to '${bestEffort}' anyway, but the installation is likely to fail. Set the 'DOTNET_INSTALL_DIR' environment variable to a writable location.`
     );

@@ -410,7 +410,7 @@ The resolution order is:
 1. `DOTNET_INSTALL_DIR`, when set (always respected, never overridden).
 2. The default location for the runner OS, when it is writable.
 3. `$HOME/.dotnet` (or `%USERPROFILE%\.dotnet` on Windows).
-4. `$RUNNER_TEMP/.dotnet` (or the OS temp directory).
+4. `$RUNNER_TEMP/.dotnet`, or a uniquely named directory created in the OS temp directory when `RUNNER_TEMP` isn't set.
 
 This behavior is **not** a breaking change: GitHub-hosted runners can write to the default location, so their cached .NET versions continue to be used. To force a specific location, set `DOTNET_INSTALL_DIR` explicitly.
 
