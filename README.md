@@ -412,7 +412,7 @@ The resolution order is:
 3. `$HOME/.dotnet` (or `%USERPROFILE%\.dotnet` on Windows).
 4. `$RUNNER_TEMP/.dotnet`, or a uniquely named directory created in the OS temp directory when `RUNNER_TEMP` isn't set.
 
-This behavior is **not** a breaking change: GitHub-hosted runners can write to the default location, so their cached .NET versions continue to be used. To force a specific location, set `DOTNET_INSTALL_DIR` explicitly.
+Runners that can write to the default location are unaffected and keep using the .NET preinstalled in the image. When the fallback does activate, `DOTNET_ROOT` and `PATH` point at the fallback directory, so SDKs and runtimes preinstalled under the system location are no longer picked up — set `DOTNET_INSTALL_DIR` explicitly to pin the location.
 
 ## Recommended permissions
 

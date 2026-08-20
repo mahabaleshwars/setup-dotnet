@@ -351,7 +351,9 @@ export abstract class DotnetInstallDir {
    */
   private static homeDirPath(): string | undefined {
     try {
-      return path.join(os.homedir(), '.dotnet');
+      const home = os.homedir();
+      // An empty HOME yields '', which would otherwise resolve against the cwd.
+      return path.isAbsolute(home) ? path.join(home, '.dotnet') : undefined;
     } catch {
       return undefined;
     }
@@ -442,9 +444,8 @@ export abstract class DotnetInstallDir {
       rejected.push(defaultDir);
     }
 
-    // 3. Fall back to the user's home directory when it is writable. This is
-    // not a breaking change because it only triggers in scenarios that
-    // previously failed.
+    // 3. Fall back to the user's home directory when it is writable. This also
+    // moves DOTNET_ROOT, hiding any .NET preinstalled in the default location.
     if (homeDir && !samePath(homeDir, defaultDir)) {
       if (DotnetInstallDir.isDirectoryWritable(homeDir)) {
         core.warning(

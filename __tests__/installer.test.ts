@@ -848,6 +848,19 @@ describe('installer tests', () => {
             `Falling back to '${tempFallbackPath}'`
           );
         });
+
+        it('treats an empty home directory as undetermined instead of resolving it against the working directory', () => {
+          homedirSpy.mockReturnValue('');
+          writableSpy.mockImplementation(
+            (dir: string) =>
+              path.normalize(dir) === path.normalize(tempFallbackPath)
+          );
+
+          const result = installer.DotnetInstallDir.resolveDirPath();
+
+          expect(result).toBe(tempFallbackPath);
+          expect(path.isAbsolute(result)).toBe(true);
+        });
       });
 
       describe('temp fallback location', () => {

@@ -45333,7 +45333,9 @@ class DotnetInstallDir {
      */
     static homeDirPath() {
         try {
-            return external_path_default().join(external_os_default().homedir(), '.dotnet');
+            const home = external_os_default().homedir();
+            // An empty HOME yields '', which would otherwise resolve against the cwd.
+            return external_path_default().isAbsolute(home) ? external_path_default().join(home, '.dotnet') : undefined;
         }
         catch {
             return undefined;
@@ -45410,9 +45412,8 @@ class DotnetInstallDir {
             }
             rejected.push(defaultDir);
         }
-        // 3. Fall back to the user's home directory when it is writable. This is
-        // not a breaking change because it only triggers in scenarios that
-        // previously failed.
+        // 3. Fall back to the user's home directory when it is writable. This also
+        // moves DOTNET_ROOT, hiding any .NET preinstalled in the default location.
         if (homeDir && !samePath(homeDir, defaultDir)) {
             if (DotnetInstallDir.isDirectoryWritable(homeDir)) {
                 warning(`${DotnetInstallDir.describeRejected(rejected)} Falling back to '${homeDir}'. Set the 'DOTNET_INSTALL_DIR' environment variable to override this location.`);
