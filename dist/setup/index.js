@@ -45318,18 +45318,6 @@ class DotnetInstallScript {
     }
 }
 class DotnetInstallDir {
-    static default = {
-        linux: '/usr/share/dotnet',
-        mac: external_path_default().join(external_os_default().homedir(), '.dotnet'),
-        windows: external_path_default().join(process.env['PROGRAMFILES'] + '', 'dotnet')
-    };
-    /**
-     * User-writable fallback location used when the default OS install directory
-     * is not writable (e.g. non-root / self-hosted / larger runners). Kept
-     * consistent with the default macOS location so behaviour is predictable
-     * across platforms.
-     */
-    static fallback = external_path_default().join(external_os_default().homedir(), '.dotnet');
     /**
      * Last-resort fallback used when neither the default OS location nor the
      * home directory (`$HOME/.dotnet`) are writable. Prefers the runner's
@@ -45344,6 +45332,30 @@ class DotnetInstallDir {
         return DotnetInstallDir.resolvedDirPath;
     }
     /**
+     * `$HOME/.dotnet`: the default location on macOS and the user-writable
+     * fallback elsewhere. Returns `undefined` when the home directory cannot be
+     * determined - `os.homedir()` throws for containers started with an
+     * arbitrary UID that has no passwd entry and no `HOME` set.
+     */
+    static homeDirPath() {
+        try {
+            return external_path_default().join(external_os_default().homedir(), '.dotnet');
+        }
+        catch {
+            return undefined;
+        }
+    }
+    static defaultDirPath() {
+        switch (PLATFORM) {
+            case 'linux':
+                return '/usr/share/dotnet';
+            case 'windows':
+                return external_path_default().join(process.env['PROGRAMFILES'] + '', 'dotnet');
+            case 'mac':
+                return DotnetInstallDir.homeDirPath();
+        }
+    }
+    /**
      * Resolves the directory where .NET should be installed following the
      * priority order:
      *   1. An explicit `DOTNET_INSTALL_DIR` environment variable (always honored).
@@ -45354,50 +45366,67 @@ class DotnetInstallDir {
      *      directory) when the home fallback is also not writable.
      *
      * Candidates that resolve to the same directory are only probed once (on
-     * macOS the default location and the home fallback coincide).
+     * macOS the default location and the home fallback coincide), and candidates
+     * that cannot be determined at all are skipped.
      *
      * The parameters are only used to make the resolution logic testable in
      * isolation; production code relies on the platform defaults.
      */
-    static resolveDirPath(defaultPath = DotnetInstallDir.default[PLATFORM], fallbackPath = DotnetInstallDir.fallback, tempFallbackPath = DotnetInstallDir.tempFallback) {
+    static resolveDirPath(defaultPath, fallbackPath, tempFallbackPath) {
         // 1. An explicit override always wins and is never second-guessed.
         if (process.env['DOTNET_INSTALL_DIR']) {
             return DotnetInstallDir.convertInstallPathToAbsolute(process.env['DOTNET_INSTALL_DIR']);
         }
+        // Resolved only here: looking up the home directory can fail, which must
+        // neither happen while the module loads nor block the override above.
+        const defaultDir = defaultPath ?? DotnetInstallDir.defaultDirPath();
+        const homeDir = fallbackPath ?? DotnetInstallDir.homeDirPath();
+        const tempDir = tempFallbackPath ?? DotnetInstallDir.tempFallback;
+        const samePath = (first, second) => first !== undefined &&
+            second !== undefined &&
+            external_path_default().normalize(first) === external_path_default().normalize(second);
+        const rejected = [];
         // 2. Prefer the default OS location when the user can write to it. This
         // preserves the pre-installed .NET cache on GitHub-hosted runners.
-        if (DotnetInstallDir.isDirectoryWritable(defaultPath)) {
-            return defaultPath;
+        if (defaultDir) {
+            if (DotnetInstallDir.isDirectoryWritable(defaultDir)) {
+                return defaultDir;
+            }
+            rejected.push(defaultDir);
         }
-        // On macOS the default location already is the home fallback, so it has
-        // been probed above and must not be probed (or reported) twice.
-        const defaultIsFallback = external_path_default().normalize(defaultPath) === external_path_default().normalize(fallbackPath);
         // 3. Fall back to the user's home directory when it is writable. This is
         // not a breaking change because it only triggers in scenarios that
         // previously failed.
-        if (!defaultIsFallback &&
-            DotnetInstallDir.isDirectoryWritable(fallbackPath)) {
-            warning(`The default .NET install directory '${defaultPath}' is not writable by the current user. Falling back to '${fallbackPath}'. Set the 'DOTNET_INSTALL_DIR' environment variable to override this location.`);
-            return fallbackPath;
+        if (homeDir && !samePath(homeDir, defaultDir)) {
+            if (DotnetInstallDir.isDirectoryWritable(homeDir)) {
+                warning(`${DotnetInstallDir.describeRejected(rejected)} Falling back to '${homeDir}'. Set the 'DOTNET_INSTALL_DIR' environment variable to override this location.`);
+                return homeDir;
+            }
+            rejected.push(homeDir);
         }
         // 4. Last resort: use a temporary directory when it is distinct from the
         // already rejected candidates and writable.
-        if (external_path_default().normalize(tempFallbackPath) !== external_path_default().normalize(defaultPath) &&
-            external_path_default().normalize(tempFallbackPath) !== external_path_default().normalize(fallbackPath) &&
-            DotnetInstallDir.isDirectoryWritable(tempFallbackPath)) {
-            const rejected = defaultIsFallback
-                ? `The default .NET install directory '${defaultPath}' is not writable by the current user.`
-                : `Neither the default .NET install directory '${defaultPath}' nor '${fallbackPath}' are writable by the current user.`;
-            warning(`${rejected} Falling back to '${tempFallbackPath}'. Set the 'DOTNET_INSTALL_DIR' environment variable to override this location.`);
-            return tempFallbackPath;
+        if (!rejected.some(candidate => samePath(candidate, tempDir))) {
+            if (DotnetInstallDir.isDirectoryWritable(tempDir)) {
+                warning(`${DotnetInstallDir.describeRejected(rejected)} Falling back to '${tempDir}'. Set the 'DOTNET_INSTALL_DIR' environment variable to override this location.`);
+                return tempDir;
+            }
+            rejected.push(tempDir);
         }
         // 5. Nothing is writable. Return the home fallback as a best effort and
         // surface a warning so the failure is diagnosable.
-        const probedPaths = [defaultPath, fallbackPath, tempFallbackPath].filter((candidate, index, all) => all.findIndex(other => external_path_default().normalize(other) === external_path_default().normalize(candidate)) === index);
-        warning(`None of the candidate .NET install directories are writable by the current user: ${probedPaths
-            .map(candidate => `'${candidate}'`)
-            .join(', ')}. Falling back to '${fallbackPath}', but the installation is likely to fail. Set the 'DOTNET_INSTALL_DIR' environment variable to a writable location.`);
-        return fallbackPath;
+        const bestEffort = homeDir ?? tempDir;
+        warning(`${DotnetInstallDir.describeRejected(rejected)} Falling back to '${bestEffort}' anyway, but the installation is likely to fail. Set the 'DOTNET_INSTALL_DIR' environment variable to a writable location.`);
+        return bestEffort;
+    }
+    static describeRejected(rejected) {
+        if (!rejected.length) {
+            return 'The home directory of the current user could not be determined.';
+        }
+        const paths = rejected.map(candidate => `'${candidate}'`).join(', ');
+        return rejected.length === 1
+            ? `The .NET install directory ${paths} is not writable by the current user.`
+            : `The .NET install directories ${paths} are not writable by the current user.`;
     }
     /**
      * Determines whether the current user can create/modify the given directory.

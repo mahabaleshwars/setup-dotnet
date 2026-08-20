@@ -756,7 +756,10 @@ describe('installer tests', () => {
         expect(result).toBe(fallbackPath);
         expect(warningSpy).toHaveBeenCalledTimes(1);
         expect(warningSpy.mock.calls[0][0]).toContain(
-          'None of the candidate .NET install directories are writable'
+          'are not writable by the current user'
+        );
+        expect(warningSpy.mock.calls[0][0]).toContain(
+          'the installation is likely to fail'
         );
       });
 
@@ -795,8 +798,57 @@ describe('installer tests', () => {
         expect(writableSpy).toHaveBeenCalledTimes(2);
         expect(warningSpy).toHaveBeenCalledTimes(1);
         expect(warningSpy.mock.calls[0][0]).toContain(
-          'None of the candidate .NET install directories are writable'
+          'are not writable by the current user'
         );
+      });
+
+      describe('when the home directory cannot be determined', () => {
+        const tempFallbackPath = path.join(
+          process.env['RUNNER_TEMP'] || os.tmpdir(),
+          '.dotnet'
+        );
+        let homedirSpy: jest.SpiedFunction<typeof os.homedir>;
+
+        beforeEach(() => {
+          homedirSpy = jest.spyOn(os, 'homedir').mockImplementation(() => {
+            throw Object.assign(
+              new Error(
+                'A system error occurred: uv_os_homedir returned ENOENT'
+              ),
+              {code: 'ERR_SYSTEM_ERROR'}
+            );
+          });
+        });
+
+        afterEach(() => {
+          homedirSpy.mockRestore();
+        });
+
+        it('still honors an explicit DOTNET_INSTALL_DIR', () => {
+          process.env['DOTNET_INSTALL_DIR'] = path.resolve('custom', 'dir');
+
+          const result = installer.DotnetInstallDir.resolveDirPath();
+
+          expect(result).toBe(
+            path.normalize(process.env['DOTNET_INSTALL_DIR'])
+          );
+          expect(homedirSpy).not.toHaveBeenCalled();
+        });
+
+        it('skips the home candidate and continues to the temp fallback', () => {
+          writableSpy.mockImplementation(
+            (dir: string) =>
+              path.normalize(dir) === path.normalize(tempFallbackPath)
+          );
+
+          const result = installer.DotnetInstallDir.resolveDirPath();
+
+          expect(result).toBe(tempFallbackPath);
+          expect(warningSpy).toHaveBeenCalledTimes(1);
+          expect(warningSpy.mock.calls[0][0]).toContain(
+            `Falling back to '${tempFallbackPath}'`
+          );
+        });
       });
     });
   });
