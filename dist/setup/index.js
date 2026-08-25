@@ -45376,7 +45376,7 @@ class DotnetInstallDir {
             if (DotnetInstallDir.isDirectoryWritable(candidate)) {
                 // Any other root moves DOTNET_ROOT and hides the .NET preinstalled there.
                 if (index > 0) {
-                    warning(`${DotnetInstallDir.describeUnusable(unusable)} Falling back to '${candidate}'. Set the 'DOTNET_INSTALL_DIR' environment variable to override this location.`);
+                    warning(`${DotnetInstallDir.describeUnusable(unusable)} Falling back to '${candidate}'; .NET preinstalled in the default location will no longer be used. Set the 'DOTNET_INSTALL_DIR' environment variable to override this location.`);
                 }
                 return candidate;
             }
