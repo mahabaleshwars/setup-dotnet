@@ -34,19 +34,19 @@ jest.unstable_mockModule('@actions/io', () => ({
 jest.unstable_mockModule('fs', () => {
   const actual = jest.requireActual('fs') as typeof import('fs');
   const chmodSync = jest.fn();
-  const existsSync = jest.fn(actual.existsSync);
+  const lstatSync = jest.fn(actual.lstatSync);
   const mkdtempSync = jest.fn(actual.mkdtempSync);
   const rmSync = jest.fn(actual.rmSync);
   return {
     ...actual,
     chmodSync,
-    existsSync,
+    lstatSync,
     mkdtempSync,
     rmSync,
     default: {
       ...actual,
       chmodSync,
-      existsSync,
+      lstatSync,
       mkdtempSync,
       rmSync
     }
@@ -548,21 +548,22 @@ describe('installer tests', () => {
 
     describe('isDirectoryWritable() tests', () => {
       const actualFs = jest.requireActual<typeof import('fs')>('fs');
-      const existsSyncMock = fs.existsSync as jest.Mock;
+      const lstatSyncMock = fs.lstatSync as jest.Mock;
       const mkdtempSyncMock = fs.mkdtempSync as jest.Mock;
       const rmSyncMock = fs.rmSync as jest.Mock;
+      const entry = {} as fs.Stats;
 
       afterEach(() => {
-        existsSyncMock.mockImplementation(actualFs.existsSync);
+        lstatSyncMock.mockImplementation(actualFs.lstatSync);
         mkdtempSyncMock.mockImplementation(actualFs.mkdtempSync);
         rmSyncMock.mockImplementation(actualFs.rmSync);
-        existsSyncMock.mockClear();
+        lstatSyncMock.mockClear();
         mkdtempSyncMock.mockClear();
         rmSyncMock.mockClear();
       });
 
       it('returns true when an existing directory can be written to', () => {
-        existsSyncMock.mockReturnValue(true);
+        lstatSyncMock.mockReturnValue(entry);
         mkdtempSyncMock.mockImplementation(
           (prefix: string) => `${prefix}abc123`
         );
@@ -583,7 +584,7 @@ describe('installer tests', () => {
       });
 
       it('returns false when writing to an existing directory is denied', () => {
-        existsSyncMock.mockReturnValue(true);
+        lstatSyncMock.mockReturnValue(entry);
         mkdtempSyncMock.mockImplementation(() => {
           throw Object.assign(new Error('permission denied'), {
             code: 'EACCES'
@@ -597,12 +598,35 @@ describe('installer tests', () => {
         );
       });
 
+      it('stops at a dangling symlink instead of probing its writable parent', () => {
+        const base = path.resolve('writable-base');
+        const link = path.join(base, '.dotnet');
+
+        // A dangling link has no target, so only lstat sees it.
+        lstatSyncMock.mockImplementation((p: fs.PathLike) =>
+          [base, link].includes(path.resolve(String(p))) ? entry : undefined
+        );
+        mkdtempSyncMock.mockImplementation(() => {
+          throw Object.assign(new Error('no such file or directory'), {
+            code: 'ENOENT'
+          });
+        });
+        rmSyncMock.mockImplementation(() => {});
+
+        expect(installer.DotnetInstallDir.isDirectoryWritable(link)).toBe(
+          false
+        );
+        expect(path.dirname(String(mkdtempSyncMock.mock.calls[0][0]))).toBe(
+          link
+        );
+      });
+
       it('walks up to the nearest existing ancestor, and gives up at the filesystem root', () => {
         const base = path.resolve('writable-base');
         const target = path.join(base, 'sub', 'leaf');
 
-        existsSyncMock.mockImplementation(
-          (p: fs.PathLike) => path.resolve(String(p)) === base
+        lstatSyncMock.mockImplementation((p: fs.PathLike) =>
+          path.resolve(String(p)) === base ? entry : undefined
         );
         mkdtempSyncMock.mockImplementation(
           (prefix: string) => `${prefix}abc123`
@@ -616,7 +640,7 @@ describe('installer tests', () => {
           base
         );
 
-        existsSyncMock.mockReturnValue(false);
+        lstatSyncMock.mockReturnValue(undefined);
         mkdtempSyncMock.mockClear();
         expect(installer.DotnetInstallDir.isDirectoryWritable(target)).toBe(
           false
@@ -625,7 +649,7 @@ describe('installer tests', () => {
       });
 
       it('does not remove anything when the probe directory was not created', () => {
-        existsSyncMock.mockReturnValue(true);
+        lstatSyncMock.mockReturnValue(entry);
         mkdtempSyncMock.mockImplementation(() => {
           throw Object.assign(new Error('permission denied'), {
             code: 'EPERM'

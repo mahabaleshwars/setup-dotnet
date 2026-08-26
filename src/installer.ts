@@ -3,7 +3,7 @@ import * as core from '@actions/core';
 import * as exec from '@actions/exec';
 import * as io from '@actions/io';
 import * as hc from '@actions/http-client';
-import {chmodSync, existsSync, mkdtempSync, rmSync} from 'fs';
+import {chmodSync, lstatSync, mkdtempSync, rmSync} from 'fs';
 import path from 'path';
 import {fileURLToPath} from 'url';
 import os from 'os';
@@ -441,13 +441,20 @@ export abstract class DotnetInstallDir {
   public static isDirectoryWritable(dirPath: string): boolean {
     let current = path.resolve(dirPath);
 
-    // The install script may need to create the leaf directory itself.
-    while (!existsSync(current)) {
-      const parent = path.dirname(current);
-      if (parent === current) {
-        return false;
+    try {
+      // The install script may need to create the leaf directory itself. lstat,
+      // not existsSync, so a dangling symlink is rejected by the probe below
+      // rather than skipped in favour of its writable parent.
+      while (!lstatSync(current, {throwIfNoEntry: false})) {
+        const parent = path.dirname(current);
+        if (parent === current) {
+          return false;
+        }
+        current = parent;
       }
-      current = parent;
+    } catch {
+      // A non-directory component in the path.
+      return false;
     }
 
     let probe: string | undefined;

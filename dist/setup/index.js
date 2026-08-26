@@ -45400,13 +45400,21 @@ class DotnetInstallDir {
     /** `accessSync` does not honor Windows ACLs, and unlike a file write `mkdtemp` cannot follow a planted symlink, only removes what it created, and proves subdirectories can be created. */
     static isDirectoryWritable(dirPath) {
         let current = external_path_default().resolve(dirPath);
-        // The install script may need to create the leaf directory itself.
-        while (!(0,external_fs_namespaceObject.existsSync)(current)) {
-            const parent = external_path_default().dirname(current);
-            if (parent === current) {
-                return false;
+        try {
+            // The install script may need to create the leaf directory itself. lstat,
+            // not existsSync, so a dangling symlink is rejected by the probe below
+            // rather than skipped in favour of its writable parent.
+            while (!(0,external_fs_namespaceObject.lstatSync)(current, { throwIfNoEntry: false })) {
+                const parent = external_path_default().dirname(current);
+                if (parent === current) {
+                    return false;
+                }
+                current = parent;
             }
-            current = parent;
+        }
+        catch {
+            // A non-directory component in the path.
+            return false;
         }
         let probe;
         try {
