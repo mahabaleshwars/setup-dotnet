@@ -1,5 +1,6 @@
 import {
   afterAll,
+  afterEach,
   beforeAll,
   beforeEach,
   describe,
@@ -10,6 +11,7 @@ import {
 import each from 'jest-each';
 import semver from 'semver';
 import fspromises from 'fs/promises';
+import type {PathLike, Stats} from 'fs';
 import os from 'os';
 import path from 'path';
 
@@ -551,12 +553,19 @@ describe('installer tests', () => {
       const lstatSyncMock = fs.lstatSync as jest.Mock;
       const mkdtempSyncMock = fs.mkdtempSync as jest.Mock;
       const rmSyncMock = fs.rmSync as jest.Mock;
-      const entry = {} as fs.Stats;
+      const entry = {} as Stats;
+      const probeName = (...args: unknown[]) => `${args[0]}abc123`;
 
       afterEach(() => {
-        lstatSyncMock.mockImplementation(actualFs.lstatSync);
-        mkdtempSyncMock.mockImplementation(actualFs.mkdtempSync);
-        rmSyncMock.mockImplementation(actualFs.rmSync);
+        lstatSyncMock.mockImplementation((...args: unknown[]) =>
+          actualFs.lstatSync(args[0] as PathLike)
+        );
+        mkdtempSyncMock.mockImplementation((...args: unknown[]) =>
+          actualFs.mkdtempSync(args[0] as string)
+        );
+        rmSyncMock.mockImplementation((...args: unknown[]) =>
+          actualFs.rmSync(args[0] as PathLike)
+        );
         lstatSyncMock.mockClear();
         mkdtempSyncMock.mockClear();
         rmSyncMock.mockClear();
@@ -564,9 +573,7 @@ describe('installer tests', () => {
 
       it('returns true when an existing directory can be written to', () => {
         lstatSyncMock.mockReturnValue(entry);
-        mkdtempSyncMock.mockImplementation(
-          (prefix: string) => `${prefix}abc123`
-        );
+        mkdtempSyncMock.mockImplementation(probeName);
         rmSyncMock.mockImplementation(() => {});
 
         const target = path.resolve('some', 'writable', 'dir');
@@ -603,8 +610,10 @@ describe('installer tests', () => {
         const link = path.join(base, '.dotnet');
 
         // A dangling link has no target, so only lstat sees it.
-        lstatSyncMock.mockImplementation((p: fs.PathLike) =>
-          [base, link].includes(path.resolve(String(p))) ? entry : undefined
+        lstatSyncMock.mockImplementation((...args: unknown[]) =>
+          [base, link].includes(path.resolve(String(args[0])))
+            ? entry
+            : undefined
         );
         mkdtempSyncMock.mockImplementation(() => {
           throw Object.assign(new Error('no such file or directory'), {
@@ -625,12 +634,10 @@ describe('installer tests', () => {
         const base = path.resolve('writable-base');
         const target = path.join(base, 'sub', 'leaf');
 
-        lstatSyncMock.mockImplementation((p: fs.PathLike) =>
-          path.resolve(String(p)) === base ? entry : undefined
+        lstatSyncMock.mockImplementation((...args: unknown[]) =>
+          path.resolve(String(args[0])) === base ? entry : undefined
         );
-        mkdtempSyncMock.mockImplementation(
-          (prefix: string) => `${prefix}abc123`
-        );
+        mkdtempSyncMock.mockImplementation(probeName);
         rmSyncMock.mockImplementation(() => {});
 
         expect(installer.DotnetInstallDir.isDirectoryWritable(target)).toBe(
@@ -850,8 +857,9 @@ describe('installer tests', () => {
         });
 
         afterEach(() => {
-          mkdtempSyncMock.mockImplementation(
-            jest.requireActual<typeof import('fs')>('fs').mkdtempSync
+          const actualFs = jest.requireActual<typeof import('fs')>('fs');
+          mkdtempSyncMock.mockImplementation((...args: unknown[]) =>
+            actualFs.mkdtempSync(args[0] as string)
           );
         });
 
